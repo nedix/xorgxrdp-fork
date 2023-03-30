@@ -59,7 +59,7 @@ Client connection to xrdp
 #define LTOUI32(_in) ((unsigned int)(_in))
 
 #define USE_MAX_OS_BYTES 1
-#define MAX_OS_BYTES (16 * 1024 * 1024)
+#define MAX_OS_BYTES (256 * 1024 * 1024)
 
 #define MIN_MS_BETWEEN_FRAMES 40
 #define MIN_MS_TO_WAIT_FOR_MORE_UPDATES 4
