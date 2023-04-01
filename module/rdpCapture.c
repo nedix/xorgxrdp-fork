@@ -68,9 +68,9 @@ capture
 #define YUV444_GET_U(pixel) (pixel >> 8) & UCHAR_MAX
 #define YUV444_GET_Y(pixel) (pixel >> 0) & UCHAR_MAX
 
-#define YUV444_SET_Y(pixel, Y) *pixel = (*pixel & 0xFFFFFF00) | (Y << 0);
-#define YUV444_SET_U(pixel, U) *pixel = (*pixel & 0xFFFF00FF) | (U << 8);
-#define YUV444_SET_V(pixel, V) *pixel = (*pixel & 0xFF00FFFF) | (V << 16);
+#define YUV444_SET_Y(pixel, Y) *pixel = (*pixel & 0xFFFFFF00) | ((Y) << 0);
+#define YUV444_SET_U(pixel, U) *pixel = (*pixel & 0xFFFF00FF) | ((U) << 8);
+#define YUV444_SET_V(pixel, V) *pixel = (*pixel & 0xFF00FFFF) | ((V) << 16);
 
 
 /******************************************************************************/
@@ -802,6 +802,9 @@ rdpCopyBox_a8r8g8b8_to_yuv444_709fr(rdpClientCon *clientCon,
     return 0;
 }
 
+#define XY_BYTE_COORDINATE(x, y, stride, bytes_per_cell) \
+    ((x) * bytes_per_cell) + ((y) * stride)
+
 /******************************************************************************/
 int
 a8r8g8b8_to_yuv444_709fr_box_streamV2(uint8_t *s8, int src_stride,
@@ -809,7 +812,7 @@ a8r8g8b8_to_yuv444_709fr_box_streamV2(uint8_t *s8, int src_stride,
                                       uint8_t *dst_aux, int dst_aux_stride,
                                       int fullWidth, int fullHeight)
 {
-    const int MUL_FACTOR = 2;
+    const int BYTES_PER_CELL = 4;
     int halfHeight = fullHeight / 2;
     int halfWidth = fullWidth / 2;
     int x, y;
@@ -822,15 +825,15 @@ a8r8g8b8_to_yuv444_709fr_box_streamV2(uint8_t *s8, int src_stride,
         for (x = 0; x < fullWidth; ++x)
         {
             // B1[x,y] = Y444[x,y];
-            yuv_src_buffer = s8 + ((y * src_stride) + x) * MUL_FACTOR;
-            yuv_dst_buffer = dst_main + ((y * dst_main_stride) + x) * MUL_FACTOR;
+            yuv_src_buffer = s8 + XY_BYTE_COORDINATE(x, y, src_stride, BYTES_PER_CELL);
+            yuv_dst_buffer = dst_main + XY_BYTE_COORDINATE(x, y, dst_main_stride, BYTES_PER_CELL);
             YUV444_SET_Y(yuv_dst_buffer, YUV444_GET_Y(*yuv_src_buffer));
         }
 
         for (x = 0; x < halfWidth; ++x)
         {
-            yuv_src_buffer = s8 + (((2 * y) * src_stride) + (2 * x)) * MUL_FACTOR;
-            yuv_dst_buffer = dst_aux + ((y * dst_aux_stride) + x) * MUL_FACTOR;
+            yuv_src_buffer = s8 + XY_BYTE_COORDINATE(2 * x, 2 * y, src_stride, BYTES_PER_CELL);
+            yuv_dst_buffer = dst_aux + XY_BYTE_COORDINATE(x, y, dst_aux_stride, BYTES_PER_CELL);
 
             // B4[x,y] = U444[2 * x, 2 * y];
             YUV444_SET_U(yuv_dst_buffer, YUV444_GET_U(*yuv_src_buffer));
@@ -844,9 +847,8 @@ a8r8g8b8_to_yuv444_709fr_box_streamV2(uint8_t *s8, int src_stride,
     {
         for (x = 0; x < halfWidth; ++x)
         {
-            yuv_dst_buffer = dst_main + (y * dst_main_stride) + x;
-
-            yuv_src_buffer = s8 + ((2 * y) * src_stride) + (2 * x);
+            yuv_dst_buffer = dst_main + XY_BYTE_COORDINATE(x, y, dst_main_stride, BYTES_PER_CELL);
+            yuv_src_buffer = s8 + XY_BYTE_COORDINATE(2 * x, 2 * y, src_stride, BYTES_PER_CELL);
 
             // B2[x,y] = U444[2 * x,     2 * y];
             YUV444_SET_U(yuv_dst_buffer, YUV444_GET_U(*yuv_src_buffer));
@@ -854,7 +856,7 @@ a8r8g8b8_to_yuv444_709fr_box_streamV2(uint8_t *s8, int src_stride,
             // B3[x,y] = V444[2 * x,     2 * y];
             YUV444_SET_V(yuv_dst_buffer, YUV444_GET_V(*yuv_src_buffer));
 
-            yuv_dst_buffer = s8 + (((2 * y + 1) * src_stride) + (4 * x)) * MUL_FACTOR;
+            yuv_dst_buffer = s8 + XY_BYTE_COORDINATE(4 * x, (2 * y + 1), src_stride, BYTES_PER_CELL);
 
             // B6[x,y] = U444[4 * x,     2 * y + 1];
             YUV444_SET_U(yuv_dst_buffer, YUV444_GET_U(*yuv_src_buffer));
@@ -862,7 +864,7 @@ a8r8g8b8_to_yuv444_709fr_box_streamV2(uint8_t *s8, int src_stride,
             // B7[x,y] = V444[4 * x,     2 * y + 1];
             YUV444_SET_V(yuv_dst_buffer, YUV444_GET_V(*yuv_src_buffer));
 
-            yuv_dst_buffer = s8 + (((2 * y + 1) * src_stride) + (4 * x + 2)) * MUL_FACTOR;
+            yuv_dst_buffer = s8 + XY_BYTE_COORDINATE((4 * x + 2), (2 * y + 1), src_stride, BYTES_PER_CELL);
 
             // B8[x,y] = U444[4 * x + 2, 2 * y + 1];
             YUV444_SET_U(yuv_dst_buffer, YUV444_GET_U(*yuv_src_buffer));
@@ -911,9 +913,8 @@ rdpCopyBox_yuv444_to_streamV2(rdpClientCon *clientCon,
     for (index = 0; index < num_rects; ++index)
     {
         box = rects + index;
-        s8 = src + (box->y1 - srcy) * src_stride;
-        s8 += (box->x1 - srcx) * 4;
-
+        // s8 = d8 + (box->y1 - srcy) * src_stride;
+        // s8 += (box->x1 - srcx) * 4;
 
         d8 = dst_main + (box->y1 - dst_main_y) * dst_main_stride;
         d8 += (box->x1 - dst_main_x) * 4;
@@ -923,7 +924,7 @@ rdpCopyBox_yuv444_to_streamV2(rdpClientCon *clientCon,
 
         width = box->x2 - box->x1;
         height = box->y2 - box->y1;
-        a8r8g8b8_to_yuv444_709fr_box_streamV2(s8, src_stride,
+        a8r8g8b8_to_yuv444_709fr_box_streamV2(d8, dst_main_stride,
                                               d8, dst_main_stride,
                                               dst_aux, dst_aux_stride,
                                               width, height);
@@ -1568,7 +1569,8 @@ rdpCapture3(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
         //                       int dst_aux_x, int dst_aux_y,
         //                       BoxPtr rects, int num_rects)
         dst_uv = dst;
-        dst_uv += clientCon->cap_width * clientCon->cap_height;
+        //dst_uv = clientCon->cap_width * clientCon->cap_height;
+        dst_uv += XY_BYTE_COORDINATE(clientCon->cap_width, clientCon->cap_height, dst_stride, 4);
         rdpCopyBox_yuv444_to_streamV2(clientCon,
                                       //src
                                       src, src_stride,
@@ -1580,7 +1582,6 @@ rdpCapture3(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
                                       dst_uv, dst_stride,
                                       0, 0,
                                       *out_rects, num_rects);
-        
     }
     else if (dst_format == XRDP_nv12_709fr)
     {
