@@ -834,7 +834,7 @@ extractY(const uint8_t *image_data, int x, int y, int width, int height,
          int image_stride, int bytes_per_pixel, uint32_t *value) {
     int offset = XY_BYTE_COORDINATE(x, y, image_stride, bytes_per_pixel);
     int max_coord = MAX_LINEAR_COORDINATE(width, height, bytes_per_pixel);
-    if (offset > max_coord) {
+    if (offset >= max_coord) {
         //LLOGLN(0, ("rejected!"));
         return 1;
     }
@@ -852,7 +852,7 @@ extractU(const uint8_t *image_data, int x, int y, int width, int height,
          int image_stride, int bytes_per_pixel, uint32_t *value) {
     int offset = XY_BYTE_COORDINATE(x, y, image_stride, bytes_per_pixel);
     int max_coord = MAX_LINEAR_COORDINATE(width, height, bytes_per_pixel);
-    if (offset > max_coord) {
+    if (offset >= max_coord) {
         //LLOGLN(0, ("rejected!"));
         return 1;
     }
@@ -870,7 +870,7 @@ extractV(const uint8_t *image_data, int x, int y, int width, int height,
          int image_stride, int bytes_per_pixel, uint32_t *value) {
     int offset = XY_BYTE_COORDINATE(x, y, image_stride, bytes_per_pixel);
     int max_coord = MAX_LINEAR_COORDINATE(width, height, bytes_per_pixel);
-    if (offset > max_coord) {
+    if (offset >= max_coord) {
         //LLOGLN(0, ("rejected!"));
         return 1;
     }
@@ -899,10 +899,10 @@ a8r8g8b8_to_yuv444_709fr_box_streamV2(const uint8_t *s8, int src_stride,
     uint32_t *yuv_dst_buffer;
     uint32_t extracted_value;
 
-    for (y = 0; y < full_height; ++y)
+    for (y = 0; y < full_height - 1; ++y)
     {
         //Multiply by 4 because it won't work otherwise. (uint8 -> uint32)
-        for (x = 0; x < full_width; ++x)
+        for (x = 0; x < full_width - 1; ++x)
         {
             //LLOGLN(0, ("B1: a8r8g8b8_to_yuv444_709fr_box_streamV2: x: %d, y: %d", x, y));
             // B1[x,y] = Y444[x,y];
@@ -1015,33 +1015,33 @@ rdpCopyBox_yuv444_to_streamV2(rdpClientCon *clientCon,
     BoxPtr box;
 
     // First convert to YUV444
-    // for (index = 0; index < num_rects; ++index)
-    // {
-    //     box = rects + index;
-    //     s8 = src + (box->y1 - srcy) * src_stride;
-    //     s8 += (box->x1 - srcx) * 4;
-    //     d8 = dst_main + (box->y1 - dst_main_y) * dst_main_stride;
-    //     d8 += (box->x1 - dst_main_x) * 4;
-    //     width = box->x2 - box->x1;
-    //     height = box->y2 - box->y1;
-    //     a8r8g8b8_to_yuv444_709fr_box(s8, src_stride,
-    //                                  d8, dst_main_stride,
-    //                                  width, height);
-    // }
+    for (index = 0; index < num_rects; ++index)
+    {
+        box = rects + index;
+        s8 = src + (box->y1 - srcy) * src_stride;
+        s8 += (box->x1 - srcx) * 4;
+        d8 = dst_main + (box->y1 - dst_main_y) * dst_main_stride;
+        d8 += (box->x1 - dst_main_x) * 4;
+        width = box->x2 - box->x1;
+        height = box->y2 - box->y1;
+        a8r8g8b8_to_yuv444_709fr_box(s8, src_stride,
+                                     d8, dst_main_stride,
+                                     width, height);
+    }
 
-    // for (index = 0; index < num_rects; ++index)
-    // {
-    //     box = rects + index;
-    //     s8 = src + (box->y1 - srcy) * src_stride;
-    //     s8 += (box->x1 - srcx) * 4;
-    //     d8 = dst_aux + (box->y1 - dst_aux_y) * dst_aux_stride;
-    //     d8 += (box->x1 - dst_main_x) * 4;
-    //     width = box->x2 - box->x1;
-    //     height = box->y2 - box->y1;
-    //     a8r8g8b8_to_yuv444_709fr_box(s8, src_stride,
-    //                                  d8, dst_aux_stride,
-    //                                  width, height);
-    // }
+    for (index = 0; index < num_rects; ++index)
+    {
+        box = rects + index;
+        s8 = src + (box->y1 - srcy) * src_stride;
+        s8 += (box->x1 - srcx) * 4;
+        d8 = dst_aux + (box->y1 - dst_aux_y) * dst_aux_stride;
+        d8 += (box->x1 - dst_main_x) * 4;
+        width = box->x2 - box->x1;
+        height = box->y2 - box->y1;
+        a8r8g8b8_to_yuv444_709fr_box(s8, src_stride,
+                                     d8, dst_aux_stride,
+                                     width, height);
+    }
 
     // Now that it's been converted, split the streams
     for (index = 0; index < num_rects; ++index)
