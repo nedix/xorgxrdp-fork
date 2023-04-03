@@ -1172,7 +1172,7 @@ rdpClientConProcessMsgClientInfo(rdpPtr dev, rdpClientCon *clientCon)
         bytes = clientCon->cap_width * clientCon->cap_height * 2;
         if (clientCon->client_info.capture_format == XRDP_yuv444_709fr)
         {
-            bytes = clientCon->cap_width * clientCon->cap_height * 4;
+            bytes = clientCon->cap_width * clientCon->cap_height * 4 * 10;
         }
         rdpClientConAllocateSharedMemory(clientCon, bytes);
         clientCon->shmem_lineBytes = clientCon->rdp_Bpp * clientCon->cap_width;

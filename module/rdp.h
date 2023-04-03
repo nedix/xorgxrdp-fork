@@ -31,6 +31,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <mipointer.h>
 #include <randrstr.h>
 #include <damage.h>
+#include <limits.h>
 
 #include "rdpPri.h"
 
@@ -55,9 +56,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     ((((r) >> 0) << 0)  | (((g) >> 0) << 8) | (((b) >> 0) << 16))
 #define SPLITCOLOR32(r, g, b, c) \
     do { \
-        r = ((c) >> 16) & 0xff; \
-        g = ((c) >> 8) & 0xff; \
-        b = (c) & 0xff; \
+        r = ((c) >> 16) & UCHAR_MAX; \
+        g = ((c) >> 8) & UCHAR_MAX; \
+        b = (c) & UCHAR_MAX; \
     } while (0)
 
 /* PIXMAN_a8b8g8r8 */
