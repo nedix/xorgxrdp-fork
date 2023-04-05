@@ -1069,53 +1069,101 @@ a8r8g8b8_to_yuv444_709fr_box_streamV2(const uint8_t *s8, int src_stride,
 
     ////////////////////////// END MAIN VIEW ///////////////////////////////////
 
-    for (y = 0; y < mod_height; ++y)
+    for (y = 0; y < half_height; ++y)
     {
-        for (x = 0; x < half_width - 1; ++x)
+        for (x = 0; x < mod_width - 1; ++x)
         {
-            // B4[x, y] = U444[x, 2 * y];
+            // B4[x, y] = U444[x, 2 * y + 1];
             yuv_dst_buffer = (uint32_t*)(dst_aux + XY_BYTE_COORDINATE(x, y, dst_aux_stride, BYTES_PER_CELL));
-            if (!extractU(s8, 2 * x + 1, 2 * y, mod_width, mod_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
+            if (!extractU(s8, x, 2 * y + 1, mod_width, mod_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
                 YUV444_SET_U(yuv_dst_buffer[0], (uint8_t)extracted_value);    
             }
 
             // B5[(W/2) + x, y] = V444[2 * x, 2 * y];
-            yuv_dst_buffer = (uint32_t*)(dst_aux + XY_BYTE_COORDINATE(half_width + x, y, dst_aux_stride, BYTES_PER_CELL));
-            if (!extractV(s8, 2 * x, 2 * y + 1, mod_width, mod_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
+            yuv_dst_buffer = (uint32_t*)(dst_aux + XY_BYTE_COORDINATE(x, half_height + y, dst_aux_stride, BYTES_PER_CELL));
+            if (!extractV(s8, x, 2 * y + 1, mod_width, mod_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
                 YUV444_SET_V(yuv_dst_buffer[0], (uint8_t)extracted_value);
             }
         }
     }
 
-    for (y = 0; y < half_height - 1; ++y)
+    for (y = 0; y < quarter_height - 1; ++y)
     {
-        for (x = 0; x < quarter_width - 1; ++x)
+        for (x = 0; x < half_width - 1; ++x)
         {
             // B6[x, y] = U444[4 * x, 2 * y + 1];
             yuv_dst_buffer = (uint32_t*)(dst_aux + XY_BYTE_COORDINATE(x, y, dst_aux_stride, BYTES_PER_CELL));
-            if (!extractU(s8, 4 * x, 2 * y + 1, mod_width, mod_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
+            if (!extractU(s8, 2 * x + 1, 4 * y, mod_width, mod_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
                 YUV444_SET_U(yuv_dst_buffer[0], (uint8_t)extracted_value);
             }
 
-            // B7[(W/4) + x, y] = V444[4 * x, 2 * y + 1];
-            yuv_dst_buffer = (uint32_t*)(dst_aux + XY_BYTE_COORDINATE(quarter_width + x, y, dst_aux_stride, BYTES_PER_CELL));
-            if (!extractV(s8, 4 * x, 2 * y + 1, mod_width, mod_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
+            // B7[x, (H/4) + y] = V444[2 * x + 1, 4 * y];
+            yuv_dst_buffer = (uint32_t*)(dst_aux + XY_BYTE_COORDINATE(x, quarter_height + y, dst_aux_stride, BYTES_PER_CELL));
+            if (!extractV(s8, 2 * x + 1, 4 * y, mod_width, mod_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
                 YUV444_SET_V(yuv_dst_buffer[0], (uint8_t)extracted_value);
             }
 
-            // B8[x, y] = U444[4 * x + 2, 2 * y + 1];
+            // B8[x, y] = U444[2 * x + 1, 4 * y + 2];
             yuv_dst_buffer = (uint32_t*)(dst_aux + XY_BYTE_COORDINATE(x, y, dst_aux_stride, BYTES_PER_CELL));
-            if (!extractU(s8, 4 * x + 2, 2 * y + 1, mod_width, mod_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
+            if (!extractU(s8, 2 * x + 2, 4 * y + 2, mod_width, mod_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
                 YUV444_SET_U(yuv_dst_buffer[0], (uint8_t)extracted_value);
             }
 
-            // B9[(W/4) + x, y] = V444[4 * x + 2, 2 * y + 1];
-            yuv_dst_buffer = (uint32_t*)(dst_aux + XY_BYTE_COORDINATE(quarter_width + x, y, dst_aux_stride, BYTES_PER_CELL));
-            if (!extractV(s8, 4 * x + 2, 2 * y + 1, mod_width, mod_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
+            // B9[x, (H/4) + y] = V444[2x + 1, 4y + 2];
+            yuv_dst_buffer = (uint32_t*)(dst_aux + XY_BYTE_COORDINATE(x, quarter_height + y, dst_aux_stride, BYTES_PER_CELL));
+            if (!extractV(s8, 2 * x + 1, 4 * y + 2, mod_width, mod_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
                 YUV444_SET_V(yuv_dst_buffer[0], (uint8_t)extracted_value);
             }
         }
     }
+
+    // for (y = 0; y < mod_height; ++y)
+    // {
+    //     for (x = 0; x < half_width - 1; ++x)
+    //     {
+    //         // B4[x, y] = U444[x, 2 * y];
+    //         yuv_dst_buffer = (uint32_t*)(dst_aux + XY_BYTE_COORDINATE(x, y, dst_aux_stride, BYTES_PER_CELL));
+    //         if (!extractU(s8, 2 * x + 1, 2 * y, mod_width, mod_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
+    //             YUV444_SET_U(yuv_dst_buffer[0], (uint8_t)extracted_value);    
+    //         }
+
+    //         // B5[(W/2) + x, y] = V444[2 * x, 2 * y];
+    //         yuv_dst_buffer = (uint32_t*)(dst_aux + XY_BYTE_COORDINATE(half_width + x, y, dst_aux_stride, BYTES_PER_CELL));
+    //         if (!extractV(s8, 2 * x, 2 * y + 1, mod_width, mod_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
+    //             YUV444_SET_V(yuv_dst_buffer[0], (uint8_t)extracted_value);
+    //         }
+    //     }
+    // }
+
+    // for (y = 0; y < half_height - 1; ++y)
+    // {
+    //     for (x = 0; x < quarter_width - 1; ++x)
+    //     {
+    //         // B6[x, y] = U444[4 * x, 2 * y + 1];
+    //         yuv_dst_buffer = (uint32_t*)(dst_aux + XY_BYTE_COORDINATE(x, y, dst_aux_stride, BYTES_PER_CELL));
+    //         if (!extractU(s8, 4 * x, 2 * y + 1, mod_width, mod_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
+    //             YUV444_SET_U(yuv_dst_buffer[0], (uint8_t)extracted_value);
+    //         }
+
+    //         // B7[(W/4) + x, y] = V444[4 * x, 2 * y + 1];
+    //         yuv_dst_buffer = (uint32_t*)(dst_aux + XY_BYTE_COORDINATE(quarter_width + x, y, dst_aux_stride, BYTES_PER_CELL));
+    //         if (!extractV(s8, 4 * x, 2 * y + 1, mod_width, mod_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
+    //             YUV444_SET_V(yuv_dst_buffer[0], (uint8_t)extracted_value);
+    //         }
+
+    //         // B8[x, y] = U444[4 * x + 2, 2 * y + 1];
+    //         yuv_dst_buffer = (uint32_t*)(dst_aux + XY_BYTE_COORDINATE(x, y, dst_aux_stride, BYTES_PER_CELL));
+    //         if (!extractU(s8, 4 * x + 2, 2 * y + 1, mod_width, mod_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
+    //             YUV444_SET_U(yuv_dst_buffer[0], (uint8_t)extracted_value);
+    //         }
+
+    //         // B9[(W/4) + x, y] = V444[4 * x + 2, 2 * y + 1];
+    //         yuv_dst_buffer = (uint32_t*)(dst_aux + XY_BYTE_COORDINATE(quarter_width + x, y, dst_aux_stride, BYTES_PER_CELL));
+    //         if (!extractV(s8, 4 * x + 2, 2 * y + 1, mod_width, mod_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
+    //             YUV444_SET_V(yuv_dst_buffer[0], (uint8_t)extracted_value);
+    //         }
+    //     }
+    // }
     return 0;
 }
 
@@ -1814,7 +1862,7 @@ rdpCapture3(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
         //                       BoxPtr rects, int num_rects)
         dst_uv = dst;
         //dst_uv = clientCon->cap_width * clientCon->cap_height;
-        dst_uv += XY_BYTE_COORDINATE(clientCon->cap_width, clientCon->cap_height, dst_stride, 1);
+        dst_uv += XY_BYTE_COORDINATE(clientCon->cap_width, clientCon->cap_height, dst_stride, 1) * 2;
         rdpCopyBox_yuv444_to_streamV2(clientCon,
                                       //src
                                       src, src_stride,
