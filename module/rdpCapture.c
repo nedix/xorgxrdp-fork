@@ -59,9 +59,17 @@ capture
 #define LLOGLN(_level, _args) \
     do { if (_level < LOG_LEVEL) { ErrorF _args ; ErrorF("\n"); } } while (0)
 
-#define YUV444_SET_Y(pixel, Y) pixel = ((pixel) & 0xFFFFFF00) | ((Y) << 0);
-#define YUV444_SET_U(pixel, U) pixel = ((pixel) & 0xFFFF00FF) | ((U) << 8);
-#define YUV444_SET_V(pixel, V) pixel = ((pixel) & 0xFF00FFFF) | ((V) << 16);
+// #define YUV444_SET_Y(pixel, Y) pixel = ((pixel) & 0xFFFFFF00) | ((Y) << 0)
+// #define YUV444_SET_U(pixel, U) pixel = ((pixel) & 0xFFFF00FF) | ((U) << 8)
+// #define YUV444_SET_V(pixel, V) pixel = ((pixel) & 0xFF00FFFF) | ((V) << 16)
+
+#define YUV444_SET_V(pixel, V) pixel = (((pixel) & 0xFFFFFF00) | ((V) << 0))
+#define YUV444_SET_U(pixel, U) pixel = (((pixel) & 0xFFFF00FF) | ((U) << 8))
+#define YUV444_SET_Y(pixel, Y) pixel = (((pixel) & 0xFF00FFFF) | ((Y) << 16))
+
+// #define YUV444_SET_U(pixel, U) pixel = ((pixel) & 0x00FFFFFF) | ((U) << 24)
+// #define YUV444_SET_V(pixel, V) pixel = ((pixel) & 0xFF00FFFF) | ((V) << 16)
+// #define YUV444_SET_Y(pixel, Y) pixel = ((pixel) & 0xFFFF00FF) | ((Y) << 8)
 
 /******************************************************************************/
 /* copy rects with no error checking */
@@ -632,7 +640,7 @@ a8r8g8b8_to_yuv444_709fr_box(const uint8_t *s8, int src_stride,
     int jndex;
     int R, G, B;
     int Y, U, V;
-    int cY, cU, cV;
+    int cY, cU, cV, cA;
     int pixel;
     const uint32_t *s32;
     uint32_t *d32;
@@ -652,7 +660,8 @@ a8r8g8b8_to_yuv444_709fr_box(const uint8_t *s8, int src_stride,
             cY = RDPCLAMP(Y, 0, UCHAR_MAX) << 16;
             cU = RDPCLAMP(U, 0, UCHAR_MAX) << 8;
             cV = RDPCLAMP(V, 0, UCHAR_MAX);
-            d32[0] = cY | cU | cV;
+            cA = 0xFF << 24;
+            d32[0] = cY | cU | cV | cA;
             d32++;
         }
     }
@@ -798,12 +807,19 @@ rdpCopyBox_a8r8g8b8_to_yuv444_709fr(rdpClientCon *clientCon,
 #define MAX_LINEAR_COORDINATE(width, height, bytes_per_cell) \
     ((width) * (height) * (bytes_per_cell))
 
-#define YUV444_GET_V(pixel) \
-    (pixel >> 16) & UCHAR_MAX
-#define YUV444_GET_U(pixel) \
-    (pixel >> 8) & UCHAR_MAX
-#define YUV444_GET_Y(pixel) \
-    (pixel >> 0) & UCHAR_MAX
+// #define YUV444_GET_V(pixel) 
+//     (pixel >> 16) & UCHAR_MAX
+// #define YUV444_GET_U(pixel) 
+//     (pixel >> 8) & UCHAR_MAX
+// #define YUV444_GET_Y(pixel) 
+//     (pixel >> 0) & UCHAR_MAX
+
+// #define YUV444_GET_Y(pixel)
+//     (pixel >> 16) & UCHAR_MAX
+// #define YUV444_GET_U(pixel)
+//     (pixel >> 8) & UCHAR_MAX
+// #define YUV444_GET_V(pixel)
+//     (pixel >> 0) & UCHAR_MAX
 
 // RGB_SPLIT(R, G, B, pixel);
 // Y =  ( 54 * R + 183 * G +  18 * B) >> 8;
@@ -829,59 +845,165 @@ rdpCopyBox_a8r8g8b8_to_yuv444_709fr(rdpClientCon *clientCon,
 // 	return ((128lu * R - 116lu * G - 12lu * B) >> 8lu) + 128lu;
 // }
 
-static int
+static uint32_t
 extractY(const uint8_t *image_data, int x, int y, int width, int height, 
          int image_stride, int bytes_per_pixel, uint32_t *value) {
-    int offset = XY_BYTE_COORDINATE(x, y, image_stride, bytes_per_pixel);
-    int max_coord = MAX_LINEAR_COORDINATE(width, height, bytes_per_pixel);
+    const int offset = XY_BYTE_COORDINATE(x, y, image_stride, bytes_per_pixel);
+    const int max_coord = MAX_LINEAR_COORDINATE(width, height, bytes_per_pixel);
     if (offset >= max_coord) {
         //LLOGLN(0, ("rejected!"));
         return 1;
     }
     //LLOGLN(0, ("extractY offset: %d, max: %d", offset, max_coord));
     const uint32_t *pixel = (const uint32_t*)(image_data + offset);
-    int R, G, B, Y;
+    uint32_t R, G, B, Y;
     SPLITCOLOR32(R, G, B, *pixel);
-    Y = (54u * R + 183u * G + 18u * B) >> 8u;
+    Y = (54 * R + 183 * G + 18 * B) >> 8;
     *value = RDPCLAMP(Y, 0, UCHAR_MAX);
     return 0;
 }
 
-static int
+static uint32_t
 extractU(const uint8_t *image_data, int x, int y, int width, int height, 
          int image_stride, int bytes_per_pixel, uint32_t *value) {
-    int offset = XY_BYTE_COORDINATE(x, y, image_stride, bytes_per_pixel);
-    int max_coord = MAX_LINEAR_COORDINATE(width, height, bytes_per_pixel);
+    const int offset = XY_BYTE_COORDINATE(x, y, image_stride, bytes_per_pixel);
+    const int max_coord = MAX_LINEAR_COORDINATE(width, height, bytes_per_pixel);
     if (offset >= max_coord) {
         //LLOGLN(0, ("rejected!"));
         return 1;
     }
     //LLOGLN(0, ("extractU offset: %d, max: %d", offset, max_coord));
     const uint32_t *pixel = (const uint32_t*)(image_data + offset);
-    int R, G, B, U;
+    uint32_t R, G, B, U;
     SPLITCOLOR32(R, G, B, *pixel);
     U = ((-29u * R - 99u * G + 128u * B) >> 8u) + 128u;
     *value = RDPCLAMP(U, 0, UCHAR_MAX);
     return 0;
 }
 
-static int
+static uint32_t
 extractV(const uint8_t *image_data, int x, int y, int width, int height, 
          int image_stride, int bytes_per_pixel, uint32_t *value) {
-    int offset = XY_BYTE_COORDINATE(x, y, image_stride, bytes_per_pixel);
-    int max_coord = MAX_LINEAR_COORDINATE(width, height, bytes_per_pixel);
+    const int offset = XY_BYTE_COORDINATE(x, y, image_stride, bytes_per_pixel);
+    const int max_coord = MAX_LINEAR_COORDINATE(width, height, bytes_per_pixel);
     if (offset >= max_coord) {
         //LLOGLN(0, ("rejected!"));
         return 1;
     }
     //LLOGLN(0, ("extractV offset: %d, max: %d", offset, max_coord));
     const uint32_t *pixel = (const uint32_t*)(image_data + offset);
-    int R, G, B, V;
+    uint32_t R, G, B, V;
     SPLITCOLOR32(R, G, B, *pixel);
     V = ((128lu * R - 116lu * G - 12lu * B) >> 8lu) + 128lu;
     *value = RDPCLAMP(V, 0, UCHAR_MAX);
     return 0;
 }
+
+// static int general_YUV444SplitToYUV420(const uint8_t *pSrc, int src_stride,
+//                                              uint8_t *pMainDst, int dst_main_stride,
+//                                              uint8_t *pAuxDst, int dst_aux_stride,
+//                                              int full_width, int full_height)
+// {
+//     LLOGLN(0, ("split it!"));
+// 	uint32_t x, y, uY = 0, vY = 0;
+// 	uint32_t halfWidth, halfHeight;
+// 	/* The auxilary frame is aligned to multiples of 16x16.
+// 	 * We need the padded height for B4 and B5 conversion. */
+// 	const uint32_t padHeight = full_height + 16 - full_height % 16;
+//     uint32_t *yuv_dst_buffer;
+//     uint32_t extracted_value;
+// 	halfWidth = (full_width + 1) / 2;
+// 	halfHeight = (full_height + 1) / 2;
+
+// 	/* B1 */
+// 	for (y = 0; y < full_height; ++y)
+// 	{
+//         for (x = 0; x < full_width; ++x)
+// 	    {
+//             //LLOGLN(0, ("B1 (x, y): %d, %d", y));
+//             yuv_dst_buffer = (uint32_t*)(dst_main + XY_BYTE_COORDINATE(x, y, dst_main_stride, BYTES_PER_CELL));
+//             if (extractY(pSrc, x, y, full_width, full_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
+//                 continue;
+//             }
+//             YUV444_SET_Y(*yuv_dst_buffer, extracted_value);
+//         }
+// 	}
+
+//     LLOGLN(0, ("no crash 1"));
+
+// 	/* B2 and B3 */
+// 	for (y = 0; y < halfHeight; ++y)
+// 	{
+// 		for (x = 0; x < halfWidth; x++)
+// 		{
+//             uint32_t one, two, three, four;
+
+//             yuv_dst_buffer = (uint32_t*)(dst_main + XY_BYTE_COORDINATE(x, y, dst_main_stride, BYTES_PER_CELL));
+
+//             if (!extractU(s8, 2 * x, 2 * y, full_width, full_height, src_stride, BYTES_PER_CELL, &one) &&
+//                 !extractU(s8, 2 * x + 1, 2 * y, full_width, full_height, src_stride, BYTES_PER_CELL, &two) &&
+//                 !extractU(s8, 2 * x, 2 * y + 1, full_width, full_height, src_stride, BYTES_PER_CELL, &three) &&
+//                 !extractU(s8, 2 * x + 1, 2 * y + 1, full_width, full_height, src_stride, BYTES_PER_CELL, &four)
+//                 )
+//             {
+//                 YUV444_SET_U(*yuv_dst_buffer, RDPCLAMP((one + two + three + four) / 4, 0, UCHAR_MAX));
+//             }
+
+//             if (!extractV(s8, 2 * x, 2 * y, mod_width, mod_height, src_stride, BYTES_PER_CELL, &one) &&
+//                 !extractV(s8, 2 * x + 1, 2 * y, mod_width, mod_height, src_stride, BYTES_PER_CELL, &two) &&
+//                 !extractV(s8, 2 * x, 2 * y + 1, mod_width, mod_height, src_stride, BYTES_PER_CELL, &three) &&
+//                 !extractV(s8, 2 * x + 1, 2 * y + 1, mod_width, mod_height, src_stride, BYTES_PER_CELL, &four)
+//                 )
+//             {
+//                 YUV444_SET_V(*yuv_dst_buffer, RDPCLAMP((one + two + three + four) / 4, 0, UCHAR_MAX));
+//             }
+// 		}
+// 	}
+
+// 	/* B4 and B5 */
+// 	for (y = 0; y < padHeight; ++y)
+// 	{
+// 		uint8_t* pY = pAuxDst[0] + y * dst_aux_stride;
+
+// 		if (y % 16 < 8)
+// 		{
+// 			const uint32_t pos = (2 * uY++ + 1);
+// 			const uint8_t* pSrcU = pSrc[1] + pos * src_stride;
+
+// 			if (pos >= full_height)
+// 				continue;
+
+// 			memcpy(pY, pSrcU, full_width);
+// 		}
+// 		else
+// 		{
+// 			const uint32_t pos = (2 * vY++ + 1);
+// 			const uint8_t* pSrcV = pSrc[2] + pos * src_stride;
+
+// 			if (pos >= full_height)
+// 				continue;
+
+// 			memcpy(pY, pSrcV, full_width);
+// 		}
+// 	}
+
+// 	/* B6 and B7 */
+// 	for (y = 0; y < halfHeight; ++y)
+// 	{
+// 		const uint8_t* pSrcU = pSrc[1] + 2 * y * src_stride;
+// 		const uint8_t* pSrcV = pSrc[2] + 2 * y * src_stride;
+// 		uint8_t* pU = pAuxDst[1] + y * dst_aux_stride;
+// 		uint8_t* pV = pAuxDst[2] + y * dst_aux_stride;
+
+// 		for (x = 0; x < halfWidth; x++)
+// 		{
+// 			pU[x] = pSrcU[2 * x + 1];
+// 			pV[x] = pSrcV[2 * x + 1];
+// 		}
+// 	}
+
+// 	return 0;
+// }
 
 /******************************************************************************/
 int
@@ -891,104 +1013,106 @@ a8r8g8b8_to_yuv444_709fr_box_streamV2(const uint8_t *s8, int src_stride,
                                       int full_width, int full_height)
 {
     const int BYTES_PER_CELL = 4;
-    const uint32_t padHeight = full_height + 16 - full_height % 16;
-    int half_height = (padHeight + 1) / 2;
+    //const uint32_t padHeight = full_height + 16 - full_height % 16;
+    int mod_height = full_height - 1;
+    int mod_width = full_width - 1;
+    int half_height = (full_height + 1) / 2;
     int half_width = (full_width + 1) / 2;
+    int quarter_width = (full_width + 1) / 4;
+    int quarter_height = (full_height + 1) / 4;
     int x, y;
-    uint32_t *yuv_src_buffer;
+    //uint32_t *yuv_src_buffer;
     uint32_t *yuv_dst_buffer;
     uint32_t extracted_value;
 
-    for (y = 0; y < full_height - 1; ++y)
+    for (y = 0; y < mod_height; ++y)
     {
-        //Multiply by 4 because it won't work otherwise. (uint8 -> uint32)
-        for (x = 0; x < full_width - 1; ++x)
+        for (x = 0; x < mod_width; ++x)
         {
-            //LLOGLN(0, ("B1: a8r8g8b8_to_yuv444_709fr_box_streamV2: x: %d, y: %d", x, y));
-            // B1[x,y] = Y444[x,y];
-            //yuv_src_buffer = s8 + XY_BYTE_COORDINATE(x, y, src_stride, BYTES_PER_CELL);
+            // B1[x, y] = Y444[x, y]
             yuv_dst_buffer = (uint32_t*)(dst_main + XY_BYTE_COORDINATE(x, y, dst_main_stride, BYTES_PER_CELL));
-            //YUV444_SET_Y(yuv_dst_buffer, YUV444_GET_Y(*yuv_src_buffer));
-            if (extractY(s8, x, y, full_width, full_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
+            if (extractY(s8, x, y, mod_width, mod_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
                 continue;
             }
-            YUV444_SET_Y(*yuv_dst_buffer, extracted_value);
+            YUV444_SET_Y(yuv_dst_buffer[0], (uint8_t)extracted_value);
         }
+    }
 
-        for (x = 0; x < half_width; ++x)
+    for (y = 0; y < half_height - 1; ++y)
+    {
+        for (x = 0; x < half_width - 1; ++x)
         {
-            //LLOGLN(0, ("B4/B5: a8r8g8b8_to_yuv444_709fr_box_streamV2: x: %d, y: %d", x, y));
-            //yuv_src_buffer = s8 + XY_BYTE_COORDINATE(2 * x, 2 * y, src_stride, BYTES_PER_CELL);
-            yuv_dst_buffer = (uint32_t*)(dst_aux + XY_BYTE_COORDINATE(x, y, dst_aux_stride, BYTES_PER_CELL));
+            uint32_t one, two, three, four;
 
-            // B4[x,y] = U444[2 * x, 2 * y];
-            //YUV444_SET_U(yuv_dst_buffer, YUV444_GET_U(*yuv_src_buffer));
-            if (!extractU(s8, 2 * x, 2 * y, full_width, full_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
-                YUV444_SET_U(*yuv_dst_buffer, extracted_value);    
+            // B2[x, y] = U444[2 * x, 2 * y];
+            yuv_dst_buffer = (uint32_t*)(dst_main + XY_BYTE_COORDINATE(x, y, dst_main_stride, BYTES_PER_CELL));            
+            if (!extractU(s8, 2 * x, 2 * y, mod_width, mod_height, src_stride, BYTES_PER_CELL, &one) &&
+                !extractU(s8, 2 * x + 1, 2 * y, mod_width, mod_height, src_stride, BYTES_PER_CELL, &two) &&
+                !extractU(s8, 2 * x, 2 * y + 1, mod_width, mod_height, src_stride, BYTES_PER_CELL, &three) &&
+                !extractU(s8, 2 * x + 1, 2 * y + 1, mod_width, mod_height, src_stride, BYTES_PER_CELL, &four)
+                )
+            {
+                YUV444_SET_U(yuv_dst_buffer[0], (uint8_t)RDPCLAMP((one + two + three + four + 2) / 4, 0, UCHAR_MAX));
             }
 
-            // B5[x,y] = V444[2 * x, 2 * y];
-            //YUV444_SET_V(yuv_dst_buffer, YUV444_GET_V(*yuv_src_buffer));
-            if (!extractV(s8, 2 * x, 2 * y, full_width, full_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
-                YUV444_SET_V(*yuv_dst_buffer, extracted_value);
+            // B3[x, y] = V444[2 * x, 2 * y];
+            if (!extractV(s8, 2 * x, 2 * y, mod_width, mod_height, src_stride, BYTES_PER_CELL, &one) &&
+                !extractV(s8, 2 * x + 1, 2 * y, mod_width, mod_height, src_stride, BYTES_PER_CELL, &two) &&
+                !extractV(s8, 2 * x, 2 * y + 1, mod_width, mod_height, src_stride, BYTES_PER_CELL, &three) &&
+                !extractV(s8, 2 * x + 1, 2 * y + 1, mod_width, mod_height, src_stride, BYTES_PER_CELL, &four)
+                )
+            {
+                YUV444_SET_V(yuv_dst_buffer[0], (uint8_t)RDPCLAMP((one + two + three + four + 2) / 4, 0, UCHAR_MAX));
             }
         }
     }
 
-    for (y = 0; y < half_height; ++y)
+    ////////////////////////// END MAIN VIEW ///////////////////////////////////
+
+    for (y = 0; y < mod_height; ++y)
     {
-        for (x = 0; x < half_width; ++x)
+        for (x = 0; x < half_width - 1; ++x)
         {
-            //LLOGLN(0, ("B2/B3/B6/B7/B8/B9: a8r8g8b8_to_yuv444_709fr_box_streamV2: x: %d, y: %d", x, y));
-            yuv_dst_buffer = (uint32_t*)(dst_main + XY_BYTE_COORDINATE(x, y, dst_main_stride, BYTES_PER_CELL));
-            //yuv_src_buffer = s8 + XY_BYTE_COORDINATE(2 * x, 2 * y, src_stride, BYTES_PER_CELL);
-
-            //LLOGLN(0, ("about to set B2U", x, y));
-            // B2[x,y] = U444[2 * x,     2 * y];
-            //YUV444_SET_U(yuv_dst_buffer, YUV444_GET_U(*yuv_src_buffer));
-
-            if (!extractU(s8, 2 * x, 2 * y, full_width, full_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
-                YUV444_SET_U(*yuv_dst_buffer, extracted_value);
-            }
-
-            //LLOGLN(0, ("about to set B3V", x, y));
-            // B3[x,y] = V444[2 * x,     2 * y];
-            //YUV444_SET_V(yuv_dst_buffer, YUV444_GET_V(*yuv_src_buffer));
-
-            if (!extractV(s8, 2 * x, 2 * y, full_width, full_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
-                YUV444_SET_V(*yuv_dst_buffer, extracted_value);
-            }
-
+            // B4[x, y] = U444[x, 2 * y];
             yuv_dst_buffer = (uint32_t*)(dst_aux + XY_BYTE_COORDINATE(x, y, dst_aux_stride, BYTES_PER_CELL));
-
-            //LLOGLN(0, ("about to set B6U - x: %d, y: %d", x, y));
-            // B6[x,y] = U444[4 * x,     2 * y + 1];
-            //YUV444_SET_U(yuv_dst_buffer, YUV444_GET_U(*yuv_src_buffer));
-            if (!extractU(s8, 4 * x, 2 * y + 1, full_width, full_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
-                YUV444_SET_U(*yuv_dst_buffer, extracted_value);
+            if (!extractU(s8, 2 * x + 1, 2 * y, mod_width, mod_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
+                YUV444_SET_U(yuv_dst_buffer[0], (uint8_t)extracted_value);    
             }
 
-            //LLOGLN(0, ("about to set B7V - x: %d, y: %d", x, y));
-            // B7[x,y] = V444[4 * x,     2 * y + 1];
-            //YUV444_SET_V(yuv_dst_buffer, YUV444_GET_V(*yuv_src_buffer));
-            if (!extractV(s8, 4 * x, 2 * y + 1, full_width, full_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
-                YUV444_SET_V(*yuv_dst_buffer, extracted_value);
+            // B5[(W/2) + x, y] = V444[2 * x, 2 * y];
+            yuv_dst_buffer = (uint32_t*)(dst_aux + XY_BYTE_COORDINATE(half_width + x, y, dst_aux_stride, BYTES_PER_CELL));
+            if (!extractV(s8, 2 * x, 2 * y + 1, mod_width, mod_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
+                YUV444_SET_V(yuv_dst_buffer[0], (uint8_t)extracted_value);
+            }
+        }
+    }
+
+    for (y = 0; y < half_height - 1; ++y)
+    {
+        for (x = 0; x < quarter_width - 1; ++x)
+        {
+            // B6[x, y] = U444[4 * x, 2 * y + 1];
+            yuv_dst_buffer = (uint32_t*)(dst_aux + XY_BYTE_COORDINATE(x, y, dst_aux_stride, BYTES_PER_CELL));
+            if (!extractU(s8, 4 * x, 2 * y + 1, mod_width, mod_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
+                YUV444_SET_U(yuv_dst_buffer[0], (uint8_t)extracted_value);
             }
 
-            //yuv_dst_buffer = dst_aux + XY_BYTE_COORDINATE((4 * x + 2), (2 * y + 1), dst_aux_stride, BYTES_PER_CELL);
-
-            //LLOGLN(0, ("about to set B8U - x: %d, y: %d", x, y));
-            // B8[x,y] = U444[4 * x + 2, 2 * y + 1];
-            //YUV444_SET_U(yuv_dst_buffer, YUV444_GET_U(*yuv_src_buffer));
-            if (!extractU(s8, 4 * x + 2, 2 * y + 1, full_width, full_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
-                YUV444_SET_U(*yuv_dst_buffer, extracted_value);
+            // B7[(W/4) + x, y] = V444[4 * x, 2 * y + 1];
+            yuv_dst_buffer = (uint32_t*)(dst_aux + XY_BYTE_COORDINATE(quarter_width + x, y, dst_aux_stride, BYTES_PER_CELL));
+            if (!extractV(s8, 4 * x, 2 * y + 1, mod_width, mod_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
+                YUV444_SET_V(yuv_dst_buffer[0], (uint8_t)extracted_value);
             }
 
-            //LLOGLN(0, ("about to set B9V - x: %d, y: %d", x, y));
-            // B9[x,y] = V444[4 * x + 2, 2 * y + 1];
-            //YUV444_SET_V(yuv_dst_buffer, YUV444_GET_V(*yuv_src_buffer));
-            if (!extractV(s8, 4 * x + 2, 2 * y + 1, full_width, full_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
-                YUV444_SET_V(*yuv_dst_buffer, extracted_value);
+            // B8[x, y] = U444[4 * x + 2, 2 * y + 1];
+            yuv_dst_buffer = (uint32_t*)(dst_aux + XY_BYTE_COORDINATE(x, y, dst_aux_stride, BYTES_PER_CELL));
+            if (!extractU(s8, 4 * x + 2, 2 * y + 1, mod_width, mod_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
+                YUV444_SET_U(yuv_dst_buffer[0], (uint8_t)extracted_value);
+            }
+
+            // B9[(W/4) + x, y] = V444[4 * x + 2, 2 * y + 1];
+            yuv_dst_buffer = (uint32_t*)(dst_aux + XY_BYTE_COORDINATE(quarter_width + x, y, dst_aux_stride, BYTES_PER_CELL));
+            if (!extractV(s8, 4 * x + 2, 2 * y + 1, mod_width, mod_height, src_stride, BYTES_PER_CELL, &extracted_value)) {
+                YUV444_SET_V(yuv_dst_buffer[0], (uint8_t)extracted_value);
             }
         }
     }
@@ -1020,26 +1144,21 @@ rdpCopyBox_yuv444_to_streamV2(rdpClientCon *clientCon,
         box = rects + index;
         s8 = src + (box->y1 - srcy) * src_stride;
         s8 += (box->x1 - srcx) * 4;
+
         d8 = dst_main + (box->y1 - dst_main_y) * dst_main_stride;
         d8 += (box->x1 - dst_main_x) * 4;
+
+        d8_aux = dst_aux + (box->y1 - dst_aux_y) * dst_aux_stride;
+        d8_aux += (box->x1 - dst_aux_x) * 4;
+
         width = box->x2 - box->x1;
         height = box->y2 - box->y1;
+
         a8r8g8b8_to_yuv444_709fr_box(s8, src_stride,
                                      d8, dst_main_stride,
                                      width, height);
-    }
-
-    for (index = 0; index < num_rects; ++index)
-    {
-        box = rects + index;
-        s8 = src + (box->y1 - srcy) * src_stride;
-        s8 += (box->x1 - srcx) * 4;
-        d8 = dst_aux + (box->y1 - dst_aux_y) * dst_aux_stride;
-        d8 += (box->x1 - dst_main_x) * 4;
-        width = box->x2 - box->x1;
-        height = box->y2 - box->y1;
         a8r8g8b8_to_yuv444_709fr_box(s8, src_stride,
-                                     d8, dst_aux_stride,
+                                     d8_aux, dst_aux_stride,
                                      width, height);
     }
 
@@ -1058,6 +1177,12 @@ rdpCopyBox_yuv444_to_streamV2(rdpClientCon *clientCon,
 
         width = box->x2 - box->x1;
         height = box->y2 - box->y1;
+
+        // general_YUV444SplitToYUV420(&s8, src_stride,
+        //                             &d8, dst_main_stride / 2,
+        //                             &d8_aux, dst_aux_stride / 2,
+        //                             width, height);
+
         a8r8g8b8_to_yuv444_709fr_box_streamV2(s8, src_stride,
                                               d8, dst_main_stride,
                                               d8_aux, dst_aux_stride,
@@ -1588,7 +1713,7 @@ rdpCapture3(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
     int dst_stride;
     int dst_format;
 
-    LLOGLN(10, ("rdpCapture3:"));
+    LLOGLN(0, ("rdpCapture3:"));
 
     if (!isShmStatusActive(clientCon->shmemstatus)) {
         LLOGLN(0, ("rdpCapture3: WARNING -- Shared memory is not configured. Aborting capture!"));
@@ -1689,7 +1814,7 @@ rdpCapture3(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
         //                       BoxPtr rects, int num_rects)
         dst_uv = dst;
         //dst_uv = clientCon->cap_width * clientCon->cap_height;
-        dst_uv += XY_BYTE_COORDINATE(clientCon->cap_width, clientCon->cap_height, dst_stride, 4);
+        dst_uv += XY_BYTE_COORDINATE(clientCon->cap_width, clientCon->cap_height, dst_stride, 1);
         rdpCopyBox_yuv444_to_streamV2(clientCon,
                                       //src
                                       src, src_stride,
@@ -1741,8 +1866,8 @@ rdpCapture(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
 {
     int mode;
 
-    LLOGLN(10, ("rdpCapture:"));
     mode = clientCon->client_info.capture_code;
+    LLOGLN(0, ("rdpCapture code: %d", mode));
     switch (mode)
     {
         case 0:
