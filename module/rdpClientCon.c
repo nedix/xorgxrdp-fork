@@ -831,8 +831,9 @@ rdpClientConProcessScreenSizeMsg(rdpPtr dev, rdpClientCon *clientCon,
 
     clientCon->cap_stride_bytes = clientCon->rdp_width * clientCon->rdp_Bpp;
 
+    //TODO: Make allocation dynamic based on AVC444 capture or not.
     bytes = clientCon->rdp_width * clientCon->rdp_height *
-            clientCon->rdp_Bpp;
+            clientCon->rdp_Bpp * 5;
     rdpClientConAllocateSharedMemory(clientCon, bytes);
     clientCon->shmem_lineBytes = clientCon->rdp_Bpp * clientCon->rdp_width;
 
@@ -1169,7 +1170,7 @@ rdpClientConProcessMsgClientInfo(rdpPtr dev, rdpClientCon *clientCon)
         clientCon->cap_height = RDPALIGN(clientCon->rdp_height, XRDP_H264_ALIGN);
         LLOGLN(0, ("  cap_width %d cap_height %d",
                clientCon->cap_width, clientCon->cap_height));
-        bytes = clientCon->cap_width * clientCon->cap_height * 2;
+        bytes = clientCon->cap_width * clientCon->cap_height * 10;
         if (clientCon->client_info.capture_format == XRDP_yuv444_709fr)
         {
             bytes = clientCon->cap_width * clientCon->cap_height * 4 * 10;
