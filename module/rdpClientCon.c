@@ -1170,10 +1170,10 @@ rdpClientConProcessMsgClientInfo(rdpPtr dev, rdpClientCon *clientCon)
         clientCon->cap_height = RDPALIGN(clientCon->rdp_height, XRDP_H264_ALIGN);
         LLOGLN(0, ("  cap_width %d cap_height %d",
                clientCon->cap_width, clientCon->cap_height));
-        bytes = clientCon->cap_width * clientCon->cap_height * 10;
+        bytes = clientCon->cap_width * clientCon->cap_height;
         if (clientCon->client_info.capture_format == XRDP_yuv444_709fr)
         {
-            bytes = clientCon->cap_width * clientCon->cap_height * 4 * 10;
+            bytes = clientCon->cap_width * clientCon->cap_height * 4;
         }
         rdpClientConAllocateSharedMemory(clientCon, bytes);
         clientCon->shmem_lineBytes = clientCon->rdp_Bpp * clientCon->cap_width;
@@ -2693,6 +2693,9 @@ rdpClientConSendPaintRectShmEx(rdpPtr dev, rdpClientCon *clientCon,
     out_uint32_le(s, id->flags);
     ++clientCon->rect_id;
     out_uint32_le(s, clientCon->rect_id);
+    if (id->flags && CONTAINS_DUAL_FRAME_AVC444) {
+        ++clientCon->rect_id;
+    }
     out_uint32_le(s, id->shmem_id);
     out_uint32_le(s, id->shmem_offset);
     out_uint16_le(s, clientCon->cap_width);
@@ -2896,7 +2899,7 @@ rdpDeferredUpdateCallback(OsTimerPtr timer, CARD32 now, pointer arg)
 /******************************************************************************/
 #define MIN_MS_BETWEEN_FRAMES 40
 #define MS_TO_WAIT_FOR_RETRY_UPDATE 4
-#define MIN_MS_TO_WAIT_FOR_MORE_UPDATES 1
+#define MIN_MS_TO_WAIT_FOR_MORE_UPDATES 10
 #define UPDATE_RETRY_TIMEOUT 200 // After this number of retries, give up and perform the capture anyway. This prevents an infinite loop.
 
 static void
