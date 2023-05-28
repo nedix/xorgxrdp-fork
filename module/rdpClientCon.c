@@ -2899,7 +2899,7 @@ rdpDeferredUpdateCallback(OsTimerPtr timer, CARD32 now, pointer arg)
 /******************************************************************************/
 #define MIN_MS_BETWEEN_FRAMES 40
 #define MS_TO_WAIT_FOR_RETRY_UPDATE 4
-#define MIN_MS_TO_WAIT_FOR_MORE_UPDATES 10
+#define MIN_MS_TO_WAIT_FOR_MORE_UPDATES 1
 #define UPDATE_RETRY_TIMEOUT 200 // After this number of retries, give up and perform the capture anyway. This prevents an infinite loop.
 
 static void
