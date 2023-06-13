@@ -923,7 +923,8 @@ rdpClientConProcessMsgClientInput(rdpPtr dev, rdpClientCon *clientCon)
         cx = (param2 >> 16) & 0xffff;
         cy = param2 & 0xffff;
         clientCon->rect_id = 0;
-        clientCon->rect_id_ack = INT_MAX;
+        clientCon->rect_id_ack = 0;
+        //clientCon->rect_id_ack = INT_MAX;
         LLOGLN(0, ("rdpClientConProcessMsgClientInput: invalidate x %d y %d "
                "cx %d cy %d", x, y, cx, cy));
         clientCon->shmemstatus = convertSharedMemoryStatusToActive(clientCon->shmemstatus);
@@ -2693,9 +2694,10 @@ rdpClientConSendPaintRectShmEx(rdpPtr dev, rdpClientCon *clientCon,
     out_uint32_le(s, id->flags);
     ++clientCon->rect_id;
     out_uint32_le(s, clientCon->rect_id);
-    if (id->flags && CONTAINS_DUAL_FRAME_AVC444) {
-        ++clientCon->rect_id;
-    }
+    // if (id->flags && CONTAINS_DUAL_FRAME_AVC444) {
+    //     ++clientCon->rect_id;
+    // }
+    ++clientCon->rect_id;
     out_uint32_le(s, id->shmem_id);
     out_uint32_le(s, id->shmem_offset);
     out_uint16_le(s, clientCon->cap_width);
@@ -2900,7 +2902,7 @@ rdpDeferredUpdateCallback(OsTimerPtr timer, CARD32 now, pointer arg)
 #define MIN_MS_BETWEEN_FRAMES 40
 #define MS_TO_WAIT_FOR_RETRY_UPDATE 4
 #define MIN_MS_TO_WAIT_FOR_MORE_UPDATES 1
-#define UPDATE_RETRY_TIMEOUT 200 // After this number of retries, give up and perform the capture anyway. This prevents an infinite loop.
+//#define UPDATE_RETRY_TIMEOUT 200 // After this number of retries, give up and perform the capture anyway. This prevents an infinite loop.
 
 static void
 rdpScheduleDeferredUpdate(rdpClientCon *clientCon, Bool can_call_now)
@@ -2909,12 +2911,12 @@ rdpScheduleDeferredUpdate(rdpClientCon *clientCon, Bool can_call_now)
     uint32_t msToWait;
     uint32_t minNextUpdateTime;
 
-    if (clientCon->updateRetries > UPDATE_RETRY_TIMEOUT) {
-        LLOGLN(10, ("rdpScheduleDeferredUpdate: clientCon->updateRetries is %d"
-                    " and has exceeded the timeout of %d retries."
-                    " Overriding rect_id_ack to INT_MAX.", clientCon->updateRetries, UPDATE_RETRY_TIMEOUT));
-        clientCon->rect_id_ack = INT_MAX;
-    }
+    // if (clientCon->updateRetries > UPDATE_RETRY_TIMEOUT) {
+    //     LLOGLN(10, ("rdpScheduleDeferredUpdate: clientCon->updateRetries is %d"
+    //                 " and has exceeded the timeout of %d retries."
+    //                 " Overriding rect_id_ack to INT_MAX.", clientCon->updateRetries, UPDATE_RETRY_TIMEOUT));
+    //     clientCon->rect_id_ack = INT_MAX;
+    // }
 
     curTime = (uint32_t) GetTimeInMillis();
     /* use two separate delays in order to limit the update rate and wait a bit
