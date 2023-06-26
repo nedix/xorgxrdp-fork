@@ -2697,7 +2697,7 @@ rdpClientConSendPaintRectShmEx(rdpPtr dev, rdpClientCon *clientCon,
     // if (id->flags && CONTAINS_DUAL_FRAME_AVC444) {
     //     ++clientCon->rect_id;
     // }
-    ++clientCon->rect_id;
+    //++clientCon->rect_id;
     out_uint32_le(s, id->shmem_id);
     out_uint32_le(s, id->shmem_offset);
     out_uint16_le(s, clientCon->cap_width);
@@ -2724,16 +2724,21 @@ rdpCapRect(rdpClientCon *clientCon, BoxPtr cap_rect, struct image_data *id)
     int num_rects;
 
     cap_dirty = rdpRegionCreate(cap_rect, 0);
-    LLOGLN(10, ("rdpCapRect: cap_rect x1 %d y1 %d x2 %d y2 %d",
-               cap_rect->x1, cap_rect->y1, cap_rect->x2, cap_rect->y2));
+    LLOGLN(10, ("rdpCapRect: cap_rect x1 %d y1 %d width %d height %d",
+               cap_rect->x1, cap_rect->y1, cap_rect->x2 - cap_rect->x1, cap_rect->y2 - cap_rect->y1));
     rdpRegionIntersect(cap_dirty, cap_dirty, clientCon->dirtyRegion);
     num_rects = REGION_NUM_RECTS(cap_dirty);
     if (num_rects > 0)
-    {
-        if (num_rects > MAX_CAPTURE_RECTS)
+    {        
+        if (num_rects > MAX_CAPTURE_RECTS
+            || clientCon->rdp_format == XRDP_yuv444_709fr)
         {
             /* the dirty region is too complex, just get a rect that
-               covers the whole region */
+               covers the whole region 
+
+               Also 444 mode is more sensitive to the precise capture rect,
+               and doesn't perform correctly without this being enabled.
+            */
             rect = *rdpRegionExtents(cap_dirty);
             rdpRegionDestroy(cap_dirty);
             cap_dirty = rdpRegionCreate(&rect, 0);
