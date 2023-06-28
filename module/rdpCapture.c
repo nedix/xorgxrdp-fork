@@ -805,9 +805,9 @@ extractY(const uint8_t *image_data, int16_t x, int16_t y,
         //LLOGLN(0, ("rejected!"));
         return 1;
     }
-    const uint32_t *pixel = (const uint32_t*)(image_data + offset);
+    const uint32_t pixel = *(const uint32_t*)(image_data + offset);
     uint32_t R, G, B, Y;
-    SPLITCOLOR32(R, G, B, *pixel);
+    SPLITCOLOR32(R, G, B, pixel);
     Y = (54lu * R + 183lu * G + 18lu * B) >> 8lu;
     *value = (uint8_t)RDPCLAMP(Y, 0, UCHAR_MAX);
     return 0;
@@ -823,9 +823,9 @@ extractU(const uint8_t *image_data, int16_t x, int16_t y,
         //LLOGLN(0, ("rejected!"));
         return 1;
     }
-    const uint32_t *pixel = (const uint32_t*)(image_data + offset);
+    const uint32_t pixel = *(const uint32_t*)(image_data + offset);
     uint32_t R, G, B, U;
-    SPLITCOLOR32(R, G, B, *pixel);
+    SPLITCOLOR32(R, G, B, pixel);
     U = ((-29lu * R - 99lu * G + 128lu * B) >> 8lu) + 128lu;
     *value = (uint8_t)RDPCLAMP(U, 0, UCHAR_MAX);
     return 0;
@@ -841,9 +841,9 @@ extractV(const uint8_t *image_data, int16_t x, int16_t y,
         //LLOGLN(0, ("rejected!"));
         return 1;
     }
-    const uint32_t *pixel = (const uint32_t*)(image_data + offset);
+    const uint32_t pixel = *(const uint32_t*)(image_data + offset);
     uint32_t R, G, B, V;
-    SPLITCOLOR32(R, G, B, *pixel);
+    SPLITCOLOR32(R, G, B, pixel);
     V = ((128lu * R - 116lu * G - 12lu * B) >> 8lu) + 128lu;
     *value = (uint8_t)RDPCLAMP(V, 0, UCHAR_MAX);
     return 0;
@@ -1478,7 +1478,7 @@ rdpCopyBox_yuv444_to_streamV2(rdpClientCon *clientCon,
                                               d8_main_uv, dst_main_uv_stride,
                                               d8_aux_y, dst_aux_y_stride,
                                               d8_aux_uv, dst_aux_uv_stride,
-                                              rect, screen_width - 2, screen_height - 2);
+                                              rect, screen_width, screen_height);
     }
     return 0;
 }
@@ -2131,7 +2131,8 @@ rdpCapture3(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
                                 0, 0,
                                 0, 0,
                                 *out_rects, num_rects,
-                                clientCon->cap_width, clientCon->cap_height);
+                                clientCon->dev->screenSwPixmap->drawable.width,
+                                clientCon->dev->screenSwPixmap->drawable.height);
         id->flags |= CONTAINS_DUAL_FRAME_AVC444;
     }
     else if (dst_format == XRDP_nv12_709fr)
