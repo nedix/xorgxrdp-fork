@@ -820,7 +820,6 @@ extractY(const uint8_t *image_data, int16_t x, int16_t y,
     const int offset = XY_BYTE_COORDINATE(x, y, image_stride, bytes_per_pixel);
     const int max_coord = MAX_LINEAR_COORDINATE(width, height, bytes_per_pixel);
     if (offset >= max_coord) {
-        //LLOGLN(0, ("rejected!"));
         return 1;
     }
     const uint32_t pixel = *(const uint32_t*)(image_data + offset);
@@ -837,7 +836,6 @@ extractU(const uint8_t *image_data, int16_t x, int16_t y,
     const int offset = XY_BYTE_COORDINATE(x, y, image_stride, bytes_per_pixel);
     const int max_coord = MAX_LINEAR_COORDINATE(width, height, bytes_per_pixel);
     if (offset >= max_coord) {
-        //LLOGLN(0, ("rejected!"));
         return 1;
     }
     const uint32_t pixel = *(const uint32_t*)(image_data + offset);
@@ -854,7 +852,6 @@ extractV(const uint8_t *image_data, int16_t x, int16_t y,
     const int offset = XY_BYTE_COORDINATE(x, y, image_stride, bytes_per_pixel);
     const int max_coord = MAX_LINEAR_COORDINATE(width, height, bytes_per_pixel);
     if (offset >= max_coord) {
-        //LLOGLN(0, ("rejected!"));
         return 1;
     }
     const uint32_t pixel = *(const uint32_t*)(image_data + offset);
