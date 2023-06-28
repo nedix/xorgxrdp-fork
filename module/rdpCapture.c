@@ -59,18 +59,6 @@ capture
 #define LLOGLN(_level, _args) \
     do { if (_level < LOG_LEVEL) { ErrorF _args ; ErrorF("\n"); } } while (0)
 
-// #define YUV444_SET_Y(pixel, Y) pixel = ((pixel) & 0xFFFFFF00) | ((Y) << 0)
-// #define YUV444_SET_U(pixel, U) pixel = ((pixel) & 0xFFFF00FF) | ((U) << 8)
-// #define YUV444_SET_V(pixel, V) pixel = ((pixel) & 0xFF00FFFF) | ((V) << 16)
-
-#define YUV444_SET_V(pixel, V) pixel = (((pixel) & 0xFFFFFF00) | ((V) << 0))
-#define YUV444_SET_U(pixel, U) pixel = (((pixel) & 0xFFFF00FF) | ((U) << 8))
-#define YUV444_SET_Y(pixel, Y) pixel = (((pixel) & 0xFF00FFFF) | ((Y) << 16))
-
-// #define YUV444_SET_U(pixel, U) pixel = ((pixel) & 0x00FFFFFF) | ((U) << 24)
-// #define YUV444_SET_V(pixel, V) pixel = ((pixel) & 0xFF00FFFF) | ((V) << 16)
-// #define YUV444_SET_Y(pixel, Y) pixel = ((pixel) & 0xFFFF00FF) | ((Y) << 8)
-
 /******************************************************************************/
 /* copy rects with no error checking */
 static int
@@ -801,12 +789,22 @@ rdpCopyBox_a8r8g8b8_to_yuv444_709fr(rdpClientCon *clientCon,
     return 0;
 }
 
+#define MAX_LINEAR_COORDINATE(width, height, bytes_per_cell) \
+    (((int)width) * ((int)height) * (bytes_per_cell))
+
 #define XY_BYTE_COORDINATE(x, y, stride, bytes_per_cell) \
-    (((x) * bytes_per_cell) + ((y) * stride))
+    ((((int)x) * bytes_per_cell) + (((int)y) * stride))
 
 static int
-extractY(const uint8_t *image_data, int16_t x, int16_t y, int image_stride, int bytes_per_pixel, uint8_t *value) {
+extractY(const uint8_t *image_data, int16_t x, int16_t y, 
+         int16_t width, int16_t height, int image_stride, 
+         int bytes_per_pixel, uint8_t *value) {
     const int offset = XY_BYTE_COORDINATE(x, y, image_stride, bytes_per_pixel);
+    const int max_coord = MAX_LINEAR_COORDINATE(width, height, bytes_per_pixel);
+    if (offset >= max_coord) {
+        //LLOGLN(0, ("rejected!"));
+        return 1;
+    }
     const uint32_t *pixel = (const uint32_t*)(image_data + offset);
     uint32_t R, G, B, Y;
     SPLITCOLOR32(R, G, B, *pixel);
@@ -816,8 +814,15 @@ extractY(const uint8_t *image_data, int16_t x, int16_t y, int image_stride, int 
 }
 
 static int
-extractU(const uint8_t *image_data, int16_t x, int16_t y, int image_stride, int bytes_per_pixel, uint8_t *value) {
+extractU(const uint8_t *image_data, int16_t x, int16_t y, 
+         int16_t width, int16_t height, int image_stride, 
+         int bytes_per_pixel, uint8_t *value) {
     const int offset = XY_BYTE_COORDINATE(x, y, image_stride, bytes_per_pixel);
+    const int max_coord = MAX_LINEAR_COORDINATE(width, height, bytes_per_pixel);
+    if (offset >= max_coord) {
+        //LLOGLN(0, ("rejected!"));
+        return 1;
+    }
     const uint32_t *pixel = (const uint32_t*)(image_data + offset);
     uint32_t R, G, B, U;
     SPLITCOLOR32(R, G, B, *pixel);
@@ -827,8 +832,15 @@ extractU(const uint8_t *image_data, int16_t x, int16_t y, int image_stride, int 
 }
 
 static int
-extractV(const uint8_t *image_data, int16_t x, int16_t y, int image_stride, int bytes_per_pixel, uint8_t *value) {
+extractV(const uint8_t *image_data, int16_t x, int16_t y, 
+         int16_t width, int16_t height, int image_stride, 
+         int bytes_per_pixel, uint8_t *value) {
     const int offset = XY_BYTE_COORDINATE(x, y, image_stride, bytes_per_pixel);
+    const int max_coord = MAX_LINEAR_COORDINATE(width, height, bytes_per_pixel);
+    if (offset >= max_coord) {
+        //LLOGLN(0, ("rejected!"));
+        return 1;
+    }
     const uint32_t *pixel = (const uint32_t*)(image_data + offset);
     uint32_t R, G, B, V;
     SPLITCOLOR32(R, G, B, *pixel);
@@ -841,98 +853,81 @@ extractV(const uint8_t *image_data, int16_t x, int16_t y, int image_stride, int 
 int
 a8r8g8b8_to_yuv444_709fr_box_streamV2_cmp(const uint8_t *s8, int src_stride,
                                       uint8_t *dst_main_y, int dst_main_y_stride,
-                                      uint8_t *dst_main_u, int dst_main_u_stride,
-                                      uint8_t *dst_main_v, int dst_main_v_stride,
+                                      uint8_t *dst_main_uv, int dst_main_uv_stride,
                                       uint8_t *dst_aux_y, int dst_aux_y_stride,
-                                      uint8_t *dst_aux_u, int dst_aux_u_stride,
-                                      uint8_t *dst_aux_v, int dst_aux_v_stride,
-                                      int16_t start_x, int16_t start_y,
-                                      int16_t box_width, int16_t box_height,
-                                      int16_t screen_width, int16_t screen_height)
+                                      uint8_t *dst_aux_uv, int dst_aux_uv_stride,
+                                      const BoxPtr rect,
+                                      int screen_width, int screen_height)
 {
     const int src_bytes_per_pixel = 4;
 
-    int16_t box_height_extent = min(start_y + box_height, screen_height);
-    int16_t box_width_extent = min(start_x + box_width, screen_width);
+    uint16_t box_height = rect->y2 - rect->y1;
+    uint16_t box_width = rect->x2 - rect->x1;
 
-    int16_t half_box_width = (box_width) / 2;
-    int16_t half_box_width_extent = min(start_x + half_box_width, screen_width / 2);
+    uint16_t half_box_width = box_width / 2;
+    uint16_t half_box_width_extent = min(rect->x1 + half_box_width, screen_width / 2);
 
-    int16_t half_box_height = (box_height) / 2;
-    int16_t half_box_height_extent = min(start_y + half_box_height, screen_height / 2);
+    uint16_t half_box_height = box_height / 2;
+    uint16_t half_box_height_extent = min(rect->y1 + half_box_height, screen_height / 2);
 
-    int16_t quarter_box_width = (box_width) / 4;
-    int16_t quarter_box_width_extent = min(start_x + quarter_box_width, screen_width / 4);
+    uint16_t quarter_box_width = box_width / 4;
+    uint16_t quarter_box_width_extent = min(rect->x1 + quarter_box_width, screen_width / 4);
 
+    uint16_t half_screen_width = screen_width / 2;
+    uint16_t quarter_screen_width = screen_width / 4;
 
-    int16_t half_screen_width = screen_width / 2;
-    int16_t quarter_screen_width = screen_width / 4;
-
-    uint16_t x, y, src_x, src_y;
-    uint8_t *y_dst_buffer;
-    uint8_t *u_dst_buffer;
-    uint8_t *v_dst_buffer;
+    uint16_t x, y;
+    uint8_t *yuv_dst_buffer;
     uint8_t extracted_value;
 
     //LLOGLN(0, ("initial"));
 
-    y_dst_buffer = dst_main_y + XY_BYTE_COORDINATE(start_x, start_y, dst_main_y_stride, 1);
-    for (y = start_y; y < box_height_extent; ++y)
+    for (y = rect->y1; y < rect->y2; ++y)
     {
-        for (x = start_x; x < box_width_extent; ++x)
+        for (x = rect->x1; x < rect->x2; ++x)
         {
             // B1[x, y] = Y444[x, y]
             //LLOGLN(0, ("Testing y 444: x %d y %d", x, y));
-            if (extractY(s8, x, y, src_stride, src_bytes_per_pixel, &extracted_value))
-            {
+            yuv_dst_buffer = dst_main_y + XY_BYTE_COORDINATE(x, y, dst_main_y_stride, 1);
+            if (extractY(s8, x, y, screen_width, screen_height, src_stride, src_bytes_per_pixel, &extracted_value)) {
                 continue;
             }
-            *y_dst_buffer = extracted_value;
-            ++y_dst_buffer;
+            yuv_dst_buffer[0] = extracted_value;
         }
     }
 
     //LLOGLN(0, ("finished main Y frame"));
-    u_dst_buffer = dst_main_u + XY_BYTE_COORDINATE(start_x, start_y, dst_main_u_stride, 1);
-    v_dst_buffer = dst_main_v + XY_BYTE_COORDINATE(start_x, start_y, dst_main_v_stride, 1);
-    src_x = start_x;
-    src_y = start_y;
-    for (y = start_y; y < half_box_height_extent; ++y, src_y += 2)
+
+    for (y = max(0, ((int)rect->y1 - 1) / 2); y < half_box_height_extent; ++y)
     {
-        // if (src_y >= screen_height)
-        // {
-        //     break;
-        // }
-        for (x = start_x; x < half_box_width_extent; ++x, src_x += 2)
+        for (x = max(0, ((int)rect->x1 - 1) / 2); x < half_box_width_extent; ++x)
         {
-            // if (src_x >= screen_width)
-            // {
-            //     break;
-            // }
             uint8_t one, two, three, four;
+
             //LLOGLN(0, ("Pre-extract main U"));
-            // B2[x, y] = U444[2 * x, 2 * y];  
-            if (!extractU(s8, src_x, src_y, src_stride, src_bytes_per_pixel, &one) &&
-                !extractU(s8, src_x + 1, src_y, src_stride, src_bytes_per_pixel, &two) &&
-                !extractU(s8, src_x, src_y + 1, src_stride, src_bytes_per_pixel, &three) &&
-                !extractU(s8, src_x + 1, src_y + 1, src_stride, src_bytes_per_pixel, &four)
+            // B2[x, y] = U444[2 * x, 2 * y];
+            yuv_dst_buffer = dst_main_uv + XY_BYTE_COORDINATE(x, y, dst_main_uv_stride, 2);
+            if (!extractU(s8, 2 * x, 2 * y, screen_width, screen_height, src_stride, src_bytes_per_pixel, &one) &&
+                !extractU(s8, 2 * x + 1, 2 * y, screen_width, screen_height, src_stride, src_bytes_per_pixel, &two) &&
+                !extractU(s8, 2 * x, 2 * y + 1, screen_width, screen_height, src_stride, src_bytes_per_pixel, &three) &&
+                !extractU(s8, 2 * x + 1, 2 * y + 1, screen_width, screen_height, src_stride, src_bytes_per_pixel, &four)
                 )
             {
                 //LLOGLN(0, ("Actual-extract U main UV"));
-                *u_dst_buffer = (uint8_t)RDPCLAMP(((int)one + two + three + four + 2) / 4, 0, UCHAR_MAX);
-                ++u_dst_buffer;
+                yuv_dst_buffer[0] = (uint8_t)RDPCLAMP(((int)one + two + three + four + 2) / 4, 0, UCHAR_MAX);
             }
+
             //LLOGLN(0, ("Pre-extract main V"));
             // B3[x, y] = V444[2 * x, 2 * y];
-            if (!extractV(s8, src_x, src_y, src_stride, src_bytes_per_pixel, &one) &&
-                !extractV(s8, src_x + 1, src_y, src_stride, src_bytes_per_pixel, &two) &&
-                !extractV(s8, src_x, src_y + 1, src_stride, src_bytes_per_pixel, &three) &&
-                !extractV(s8, src_x + 1, src_y + 1, src_stride, src_bytes_per_pixel, &four)
+            yuv_dst_buffer = dst_main_uv + XY_BYTE_COORDINATE(x, y, dst_main_uv_stride, 2);
+            if (!extractV(s8, 2 * x, 2 * y, screen_width, screen_height, src_stride, src_bytes_per_pixel, &one) &&
+                !extractV(s8, 2 * x + 1, 2 * y, screen_width, screen_height, src_stride, src_bytes_per_pixel, &two) &&
+                !extractV(s8, 2 * x, 2 * y + 1, screen_width, screen_height, src_stride, src_bytes_per_pixel, &three) &&
+                !extractV(s8, 2 * x + 1, 2 * y + 1, screen_width, screen_height, src_stride, src_bytes_per_pixel, &four)
                 )
             {
                 //LLOGLN(0, ("Actual-extract V main UV"));
-                *v_dst_buffer = (uint8_t)RDPCLAMP(((int)one + two + three + four + 2) / 4, 0, UCHAR_MAX);
-                ++v_dst_buffer;
+                yuv_dst_buffer[1] = (uint8_t)RDPCLAMP(((int)one + two + three + four + 2) / 4, 0, UCHAR_MAX);
             }
         }
     }
@@ -940,100 +935,264 @@ a8r8g8b8_to_yuv444_709fr_box_streamV2_cmp(const uint8_t *s8, int src_stride,
     //LLOGLN(0, ("finished main UV frame"));
 
     ////////////////////////// END MAIN VIEW ///////////////////////////////////
-    u_dst_buffer = dst_aux_y + XY_BYTE_COORDINATE(start_x, start_y, dst_aux_y_stride, 1);
-    v_dst_buffer = dst_aux_y + XY_BYTE_COORDINATE(start_x + half_screen_width, start_y, dst_aux_y_stride, 1);
-    src_x = start_x;
-    src_y = start_y;
-    for (y = start_y; y < box_height_extent; ++y, ++src_y)
+
+    for (y = rect->y1; y < rect->y2; ++y)
     {
-        // if (src_y >= screen_height)
-        // {
-        //     break;
-        // }
-        for (x = start_x; x < half_box_width_extent; ++x, src_x += 2)
+        for (x = max(0, ((int)rect->x1 - 1) / 2); x < half_box_width_extent; ++x)
         {
-            // if (src_x >= screen_width)
-            // {
-            //     break;
-            // }
-            //LLOGLN(0, ("Pre-extract aux-main U"));
             // B4[x, y] = U444[2x + 1, y];
-           
-            if (!extractU(s8, src_x + 1, src_y, src_stride, src_bytes_per_pixel, &extracted_value))
-            {
-                *u_dst_buffer = extracted_value;
-                ++u_dst_buffer;
+            yuv_dst_buffer = dst_aux_y + XY_BYTE_COORDINATE(x, y, dst_aux_y_stride, 1);
+            if (!extractU(s8, 2 * x + 1, y, screen_width, screen_height, src_stride, src_bytes_per_pixel, &extracted_value)) {
+                yuv_dst_buffer[0] = extracted_value;
             }
 
-            //LLOGLN(0, ("Pre-extract aux-main V"));
             // B5[(W/2) + x, y] = V444[2x + 1, y];
-            
-            if (!extractV(s8, src_x + 1, src_y, src_stride, src_bytes_per_pixel, &extracted_value))
-            {
-                *v_dst_buffer = extracted_value;
-                ++v_dst_buffer;
+            yuv_dst_buffer = dst_aux_y + XY_BYTE_COORDINATE(x + half_screen_width, y, dst_aux_y_stride, 1);
+            if (!extractV(s8, 2 * x + 1, y, screen_width, screen_height, src_stride, src_bytes_per_pixel, &extracted_value)) {
+                yuv_dst_buffer[0] = extracted_value;
             }
         }
     }
 
-    uint8_t *u_dst_buffer_2;
-    uint8_t *v_dst_buffer_2;
-
-    u_dst_buffer = dst_aux_u + XY_BYTE_COORDINATE(start_x, start_y, dst_aux_u_stride, 1);
-    v_dst_buffer = dst_aux_u + XY_BYTE_COORDINATE(start_x + quarter_screen_width, start_y, dst_aux_u_stride, 1);
-
-    u_dst_buffer_2 = dst_aux_v + XY_BYTE_COORDINATE(start_x, start_y, dst_aux_v_stride, 1);
-    v_dst_buffer_2 = dst_aux_v + XY_BYTE_COORDINATE(start_x + quarter_screen_width, start_y, dst_aux_v_stride, 1);
-    src_x = start_x;
-    src_y = start_y;
-    for (y = start_y; y < half_box_height_extent; ++y, src_y += 2)
+    for (y = max(0, ((int)rect->y1 - 1) / 2); y < half_box_height_extent; ++y)
     {
-        // if (src_y >= screen_height)
-        // {
-        //     break;
-        // }
-        for (x = start_x; x < quarter_box_width_extent; ++x, src_x += 4)
+        for (x = max(0, rect->x1 / 4); x < quarter_box_width_extent; ++x)
         {
-            // if (src_x >= screen_width)
-            // {
-            //     break;
-            // }
             //LLOGLN(0, ("Pre-extract aux U1"));
             // B6[x, y] = U444[4 * x, 2 * y + 1];
-            if (!extractU(s8, src_x, src_y + 1, src_stride, src_bytes_per_pixel, &extracted_value))
-            {
-                *u_dst_buffer = extracted_value;
-                ++u_dst_buffer;
+            yuv_dst_buffer = dst_aux_uv + XY_BYTE_COORDINATE(x, y, dst_aux_uv_stride, 2);
+            if (!extractU(s8, 4 * x, 2 * y + 1, screen_width, screen_height, src_stride, src_bytes_per_pixel, &extracted_value)) {
+                yuv_dst_buffer[0] = extracted_value;
             }
 
             //LLOGLN(0, ("Pre-extract aux V1"));
             // B7[(W/4) + x, y] = V444[4 * x, 2 * y + 1];
-            if (!extractV(s8, src_x, src_y + 1, src_stride, src_bytes_per_pixel, &extracted_value))
-            {
-                *v_dst_buffer = extracted_value;
-                ++v_dst_buffer;
-            }
-
-            //LLOGLN(0, ("Pre-extract aux U2"));
-            // B8[x, y] = U444[4 * x + 2, 2 * y + 1];
-            if (!extractU(s8, src_x + 2, src_y + 1, src_stride, src_bytes_per_pixel, &extracted_value))
-            {
-                *u_dst_buffer_2 = extracted_value;
-                ++u_dst_buffer_2;
-            }
-
-            //LLOGLN(0, ("Pre-extract aux V2"));
-            // B9[(W/4) + x, y] = V444[4 * x + 2, 2 * y + 1];
-            if (!extractV(s8, src_x + 2, src_y + 1, src_stride, src_bytes_per_pixel, &extracted_value))
-            {
-                *v_dst_buffer_2 = extracted_value;
-                ++v_dst_buffer_2;
+            yuv_dst_buffer = dst_aux_uv + XY_BYTE_COORDINATE(x + quarter_screen_width, y, dst_aux_uv_stride, 2);
+            if (!extractV(s8, 4 * x, 2 * y + 1, screen_width, screen_height, src_stride, src_bytes_per_pixel, &extracted_value)) {
+                yuv_dst_buffer[0] = extracted_value;
             }
         }
     }
 
+    for (y = max(0, ((int)rect->y1 - 1) / 2); y < half_box_height_extent; ++y)
+    {
+        for (x = max(0, ((int)rect->x1 - 2) / 4); x < quarter_box_width_extent; ++x)
+        {
+            //LLOGLN(0, ("Pre-extract aux U2"));
+            // B8[x, y] = U444[4 * x + 2, 2 * y + 1];
+            yuv_dst_buffer = dst_aux_uv + XY_BYTE_COORDINATE(x, y, dst_aux_uv_stride, 2);
+            if (!extractU(s8, 4 * x + 2, 2 * y + 1, screen_width, screen_height, src_stride, src_bytes_per_pixel, &extracted_value)) {
+                yuv_dst_buffer[1] = extracted_value;
+            }
+
+            //LLOGLN(0, ("Pre-extract aux V2"));
+            // B9[(W/4) + x, y] = V444[4 * x + 2, 2 * y + 1];
+            yuv_dst_buffer = dst_aux_uv + XY_BYTE_COORDINATE(x + quarter_screen_width, y, dst_aux_uv_stride, 2);
+            if (!extractV(s8, 4 * x + 2, 2 * y + 1, screen_width, screen_height, src_stride, src_bytes_per_pixel, &extracted_value)) {
+                yuv_dst_buffer[1] = extracted_value;
+            }
+        }
+    }
     return 0;
 }
+
+// /******************************************************************************/
+// int
+// a8r8g8b8_to_yuv444_709fr_box_streamV2_cmp(const uint8_t *s8, int src_stride,
+//                                       uint8_t *dst_main_y, int dst_main_y_stride,
+//                                       uint8_t *dst_main_u, int dst_main_u_stride,
+//                                       uint8_t *dst_main_v, int dst_main_v_stride,
+//                                       uint8_t *dst_aux_y, int dst_aux_y_stride,
+//                                       uint8_t *dst_aux_u, int dst_aux_u_stride,
+//                                       uint8_t *dst_aux_v, int dst_aux_v_stride,
+//                                       int16_t start_x, int16_t start_y,
+//                                       int16_t box_width, int16_t box_height,
+//                                       int16_t screen_width, int16_t screen_height)
+// {
+//     const int src_bytes_per_pixel = 4;
+
+//     int16_t box_height_extent = min(start_y + box_height, screen_height);
+//     int16_t box_width_extent = min(start_x + box_width, screen_width);
+
+//     int16_t half_box_width = (box_width) / 2;
+//     int16_t half_box_width_extent = min(start_x + half_box_width, screen_width / 2);
+
+//     int16_t half_box_height = (box_height) / 2;
+//     int16_t half_box_height_extent = min(start_y + half_box_height, screen_height / 2);
+
+//     int16_t quarter_box_width = (box_width) / 4;
+//     int16_t quarter_box_width_extent = min(start_x + quarter_box_width, screen_width / 4);
+
+
+//     int16_t half_screen_width = screen_width / 2;
+//     int16_t quarter_screen_width = screen_width / 4;
+
+//     uint16_t x, y, src_x, src_y;
+//     uint8_t *y_dst_buffer;
+//     uint8_t *u_dst_buffer;
+//     uint8_t *v_dst_buffer;
+//     uint8_t extracted_value;
+
+//     //LLOGLN(0, ("initial"));
+
+//     y_dst_buffer = dst_main_y + XY_BYTE_COORDINATE(start_x, start_y, dst_main_y_stride, 1);
+//     for (y = start_y; y < box_height_extent; ++y)
+//     {
+//         for (x = start_x; x < box_width_extent; ++x)
+//         {
+//             // B1[x, y] = Y444[x, y]
+//             //LLOGLN(0, ("Testing y 444: x %d y %d", x, y));
+//             if (extractY(s8, x, y, src_stride, src_bytes_per_pixel, &extracted_value))
+//             {
+//                 continue;
+//             }
+//             *y_dst_buffer = extracted_value;
+//             ++y_dst_buffer;
+//         }
+//     }
+
+//     //LLOGLN(0, ("finished main Y frame"));
+//     u_dst_buffer = dst_main_u + XY_BYTE_COORDINATE(start_x, start_y, dst_main_u_stride, 1);
+//     v_dst_buffer = dst_main_v + XY_BYTE_COORDINATE(start_x, start_y, dst_main_v_stride, 1);
+//     src_x = start_x / 2;
+//     src_y = start_y / 2;
+//     for (y = start_y; y < half_box_height_extent; ++y, src_y += 2)
+//     {
+//         // if (src_y >= screen_height)
+//         // {
+//         //     break;
+//         // }
+//         for (x = start_x; x < half_box_width_extent; ++x, src_x += 2)
+//         {
+//             // if (src_x >= screen_width)
+//             // {
+//             //     break;
+//             // }
+//             uint8_t one, two, three, four;
+//             //LLOGLN(0, ("Pre-extract main U"));
+//             // B2[x, y] = U444[2 * x, 2 * y];  
+//             if (!extractU(s8, src_x, src_y, src_stride, src_bytes_per_pixel, &one) &&
+//                 !extractU(s8, src_x + 1, src_y, src_stride, src_bytes_per_pixel, &two) &&
+//                 !extractU(s8, src_x, src_y + 1, src_stride, src_bytes_per_pixel, &three) &&
+//                 !extractU(s8, src_x + 1, src_y + 1, src_stride, src_bytes_per_pixel, &four)
+//                 )
+//             {
+//                 //LLOGLN(0, ("Actual-extract U main UV"));
+//                 *u_dst_buffer = (uint8_t)RDPCLAMP(((int)one + two + three + four + 2) / 4, 0, UCHAR_MAX);
+//                 ++u_dst_buffer;
+//             }
+//             //LLOGLN(0, ("Pre-extract main V"));
+//             // B3[x, y] = V444[2 * x, 2 * y];
+//             if (!extractV(s8, src_x, src_y, src_stride, src_bytes_per_pixel, &one) &&
+//                 !extractV(s8, src_x + 1, src_y, src_stride, src_bytes_per_pixel, &two) &&
+//                 !extractV(s8, src_x, src_y + 1, src_stride, src_bytes_per_pixel, &three) &&
+//                 !extractV(s8, src_x + 1, src_y + 1, src_stride, src_bytes_per_pixel, &four)
+//                 )
+//             {
+//                 //LLOGLN(0, ("Actual-extract V main UV"));
+//                 *v_dst_buffer = (uint8_t)RDPCLAMP(((int)one + two + three + four + 2) / 4, 0, UCHAR_MAX);
+//                 ++v_dst_buffer;
+//             }
+//         }
+//     }
+
+//     //LLOGLN(0, ("finished main UV frame"));
+
+//     ////////////////////////// END MAIN VIEW ///////////////////////////////////
+//     u_dst_buffer = dst_aux_y + XY_BYTE_COORDINATE(start_x, start_y, dst_aux_y_stride, 1);
+//     v_dst_buffer = dst_aux_y + XY_BYTE_COORDINATE(start_x + half_screen_width, start_y, dst_aux_y_stride, 1);
+//     src_x = max(0, start_x / 2 - 1);
+//     src_y = start_y;
+//     for (y = start_y; y < box_height_extent; ++y, ++src_y)
+//     {
+//         // if (src_y >= screen_height)
+//         // {
+//         //     break;
+//         // }
+//         for (x = start_x; x < half_box_width_extent; ++x, src_x += 2)
+//         {
+//             // if (src_x >= screen_width)
+//             // {
+//             //     break;
+//             // }
+//             //LLOGLN(0, ("Pre-extract aux-main U"));
+//             // B4[x, y] = U444[2x + 1, y];
+           
+//             if (!extractU(s8, src_x + 1, src_y, src_stride, src_bytes_per_pixel, &extracted_value))
+//             {
+//                 *u_dst_buffer = extracted_value;
+//                 ++u_dst_buffer;
+//             }
+
+//             //LLOGLN(0, ("Pre-extract aux-main V"));
+//             // B5[(W/2) + x, y] = V444[2x + 1, y];
+            
+//             if (!extractV(s8, src_x + 1, src_y, src_stride, src_bytes_per_pixel, &extracted_value))
+//             {
+//                 *v_dst_buffer = extracted_value;
+//                 ++v_dst_buffer;
+//             }
+//         }
+//     }
+
+//     uint8_t *u_dst_buffer_2;
+//     uint8_t *v_dst_buffer_2;
+
+//     u_dst_buffer = dst_aux_u + XY_BYTE_COORDINATE(start_x, start_y, dst_aux_u_stride, 1);
+//     v_dst_buffer = dst_aux_u + XY_BYTE_COORDINATE(start_x + quarter_screen_width, start_y, dst_aux_u_stride, 1);
+
+//     u_dst_buffer_2 = dst_aux_v + XY_BYTE_COORDINATE(start_x, start_y, dst_aux_v_stride, 1);
+//     v_dst_buffer_2 = dst_aux_v + XY_BYTE_COORDINATE(start_x + quarter_screen_width, start_y, dst_aux_v_stride, 1);
+//     src_x = max(0, start_x / 2 - 1);
+//     src_y = max(0, start_y / 4 - 2);
+//     for (y = start_y; y < half_box_height_extent; ++y, src_y += 2)
+//     {
+//         // if (src_y >= screen_height)
+//         // {
+//         //     break;
+//         // }
+//         for (x = start_x; x < quarter_box_width_extent; ++x, src_x += 4)
+//         {
+//             // if (src_x >= screen_width)
+//             // {
+//             //     break;
+//             // }
+//             //LLOGLN(0, ("Pre-extract aux U1"));
+//             // B6[x, y] = U444[4 * x, 2 * y + 1];
+//             if (!extractU(s8, src_x, src_y + 1, src_stride, src_bytes_per_pixel, &extracted_value))
+//             {
+//                 *u_dst_buffer = extracted_value;
+//                 ++u_dst_buffer;
+//             }
+
+//             //LLOGLN(0, ("Pre-extract aux V1"));
+//             // B7[(W/4) + x, y] = V444[4 * x, 2 * y + 1];
+//             if (!extractV(s8, src_x, src_y + 1, src_stride, src_bytes_per_pixel, &extracted_value))
+//             {
+//                 *v_dst_buffer = extracted_value;
+//                 ++v_dst_buffer;
+//             }
+
+//             //LLOGLN(0, ("Pre-extract aux U2"));
+//             // B8[x, y] = U444[4 * x + 2, 2 * y + 1];
+//             if (!extractU(s8, src_x + 2, src_y + 1, src_stride, src_bytes_per_pixel, &extracted_value))
+//             {
+//                 *u_dst_buffer_2 = extracted_value;
+//                 ++u_dst_buffer_2;
+//             }
+
+//             //LLOGLN(0, ("Pre-extract aux V2"));
+//             // B9[(W/4) + x, y] = V444[4 * x + 2, 2 * y + 1];
+//             if (!extractV(s8, src_x + 2, src_y + 1, src_stride, src_bytes_per_pixel, &extracted_value))
+//             {
+//                 *v_dst_buffer_2 = extracted_value;
+//                 ++v_dst_buffer_2;
+//             }
+//         }
+//     }
+
+//     return 0;
+// }
 
 uint8_t RGB2Y(uint32_t R, uint32_t G, uint32_t B)
 {
@@ -1050,14 +1209,9 @@ uint8_t RGB2U(uint32_t R, uint32_t G, uint32_t B)
 uint8_t RGB2V(uint32_t R, uint32_t G, uint32_t B)
 {
     const uint32_t V = ((128lu * R - 116lu * G - 12lu * B) >> 8lu) + 128lu;
-	return (uint8_t)RDPCLAMP(V, 0, UCHAR_MAX);
+    return (uint8_t)RDPCLAMP(V, 0, UCHAR_MAX);
 }
 
-// static void general_RGBToAVC444YUVv2_ANY_DOUBLE_ROW(
-//     const uint8_t* srcEven, const uint8_t* srcOdd, uint8_t* yLumaDstEven,
-//     uint8_t* yLumaDstOdd, uint8_t* uLumaDst, uint8_t* vLumaDst, uint8_t* yEvenChromaDst1, uint8_t* yEvenChromaDst2,
-//     uint8_t* yOddChromaDst1, uint8_t* yOddChromaDst2, uint8_t* uChromaDst1, uint8_t* uChromaDst2,
-//     uint8_t* vChromaDst1, uint8_t* vChromaDst2, const BoxPtr rect)
 static void general_RGBToAVC444YUVv2_ANY_DOUBLE_ROW(
     const uint8_t* srcEven, const uint8_t* srcOdd,
     uint8_t* yLumaDstEven, uint8_t* yLumaDstOdd, uint8_t* uvLumaDst,
@@ -1066,138 +1220,126 @@ static void general_RGBToAVC444YUVv2_ANY_DOUBLE_ROW(
     uint8_t* uChromaDst1, uint8_t* uChromaDst2,
     uint8_t* vChromaDst1, uint8_t* vChromaDst2, const BoxPtr rect)
 {
-	uint16_t x;
-	const uint32_t bpp = 4;
+    uint16_t x;
+    const uint32_t bpp = 4;
     uint32_t b, g, r;
-	for (x = rect->x1; x < rect->x2; x += 2)
-	{
-		uint8_t Ya, Ua, Va;
-		uint8_t Yb, Ub, Vb;
-		uint8_t Yc, Uc, Vc;
-		uint8_t Yd, Ud, Vd;
-		{
-			srcEven += bpp;
-			SPLITCOLOR32(r, g, b, *((uint32_t*)srcEven));
-			Ya = RGB2Y(r, g, b);
-			Ua = RGB2U(r, g, b);
-			Va = RGB2V(r, g, b);
-		}
+    for (x = rect->x1; x < rect->x2; x += 2)
+    {
+        uint8_t Ya, Ua, Va;
+        uint8_t Yb, Ub, Vb;
+        uint8_t Yc, Uc, Vc;
+        uint8_t Yd, Ud, Vd;
+        {
+            srcEven += bpp;
+            SPLITCOLOR32(r, g, b, *((uint32_t*)srcEven));
+            Ya = RGB2Y(r, g, b);
+            Ua = RGB2U(r, g, b);
+            Va = RGB2V(r, g, b);
+        }
 
-		if (x < rect->x2 - 1)
-		{
-			srcEven += bpp;
-			SPLITCOLOR32(r, g, b, *((uint32_t*)srcEven));
-			Yb = RGB2Y(r, g, b);
-			Ub = RGB2U(r, g, b);
-			Vb = RGB2V(r, g, b);
-		}
-		else
-		{
-			Yb = Ya;
-			Ub = Ua;
-			Vb = Va;
-		}
+        if (x < rect->x2 - 1)
+        {
+            srcEven += bpp;
+            SPLITCOLOR32(r, g, b, *((uint32_t*)srcEven));
+            Yb = RGB2Y(r, g, b);
+            Ub = RGB2U(r, g, b);
+            Vb = RGB2V(r, g, b);
+        }
+        else
+        {
+            Yb = Ya;
+            Ub = Ua;
+            Vb = Va;
+        }
 
-		if (srcOdd)
-		{
-			srcOdd += bpp;
-			SPLITCOLOR32(r, g, b, *((uint32_t*)srcOdd));
-			Yc = RGB2Y(r, g, b);
-			Uc = RGB2U(r, g, b);
-			Vc = RGB2V(r, g, b);
-		}
-		else
-		{
-			Yc = Ya;
-			Uc = Ua;
-			Vc = Va;
-		}
+        if (srcOdd)
+        {
+            srcOdd += bpp;
+            SPLITCOLOR32(r, g, b, *((uint32_t*)srcOdd));
+            Yc = RGB2Y(r, g, b);
+            Uc = RGB2U(r, g, b);
+            Vc = RGB2V(r, g, b);
+        }
+        else
+        {
+            Yc = Ya;
+            Uc = Ua;
+            Vc = Va;
+        }
 
-		if (srcOdd && (x < rect->x2 - 1))
-		{
-			srcOdd += bpp;
-			SPLITCOLOR32(r, g, b, *((uint32_t*)srcOdd));
-			Yd = RGB2Y(r, g, b);
-			Ud = RGB2U(r, g, b);
-			Vd = RGB2V(r, g, b);
-		}
-		else
-		{
-			Yd = Ya;
-			Ud = Ua;
-			Vd = Va;
-		}
+        if (srcOdd && (x < rect->x2 - 1))
+        {
+            srcOdd += bpp;
+            SPLITCOLOR32(r, g, b, *((uint32_t*)srcOdd));
+            Yd = RGB2Y(r, g, b);
+            Ud = RGB2U(r, g, b);
+            Vd = RGB2V(r, g, b);
+        }
+        else
+        {
+            Yd = Ya;
+            Ud = Ua;
+            Vd = Va;
+        }
 
-		/* Y [b1] */
-		*yLumaDstEven++ = Ya;
+        /* Y [b1] */
+        *yLumaDstEven++ = Ya;
 
-		if (x < rect->x2 - 1)
-			*yLumaDstEven++ = Yb;
+        if (x < rect->x2 - 1)
+        {
+            *yLumaDstEven++ = Yb;
+        }
 
-		if (srcOdd)
-			*yLumaDstOdd++ = Yc;
+        if (srcOdd)
+        {
+            *yLumaDstOdd++ = Yc;
+        }
 
-		if (srcOdd && (x < rect->x2 - 1))
-			*yLumaDstOdd++ = Yd;
+        if (srcOdd && (x < rect->x2 - 1))
+        {
+            *yLumaDstOdd++ = Yd;
+        }
 
-		/* 2x 2y [b2,b3] */
+        /* 2x 2y [b2,b3] */
         *uvLumaDst++ = (Ua + Ub + Uc + Ud) / 4;
-		*uvLumaDst++ = (Va + Vb + Vc + Vd) / 4;
-		//*uLumaDst++ = (Ua + Ub + Uc + Ud) / 4;
-		//*vLumaDst++ = (Va + Vb + Vc + Vd) / 4;
+        *uvLumaDst++ = (Va + Vb + Vc + Vd) / 4;
 
-		/* 2x+1, y [b4,b5] even */
-		if (x < rect->x2 - 1)
-		{
-			*yEvenChromaDst1++ = Ub;
-			*yEvenChromaDst2++ = Vb;
-		}
+        /* 2x+1, y [b4,b5] even */
+        if (x < rect->x2 - 1)
+        {
+            *yEvenChromaDst1++ = Ub;
+            *yEvenChromaDst2++ = Vb;
+        }
 
-		if (srcOdd)
-		{
-			/* 2x+1, y [b4,b5] odd */
-			if (x < rect->x2 - 1)
-			{
-				*yOddChromaDst1++ = Ud;
-				*yOddChromaDst2++ = Vd;
-			}
+        if (srcOdd)
+        {
+            /* 2x+1, y [b4,b5] odd */
+            if (x < rect->x2 - 1)
+            {
+                *yOddChromaDst1++ = Ud;
+                *yOddChromaDst2++ = Vd;
+            }
 
-			/* 4x 2y+1 [b6, b7] */
-			if (x % 4 == 0)
-			{
+            /* 4x 2y+1 [b6, b7] */
+            if (x % 4 == 0)
+            {
                 *uChromaDst1 = Uc;
                 uChromaDst1 += 2;
 
-				*uChromaDst2 = Vc;
+                *uChromaDst2 = Vc;
                 uChromaDst2 += 2;
-
-                //Works but with issues.
-                //*uChromaDst++ = Uc;
-                //*uChromaDst++ = Vc;
-
-                //OG version
-				//*uChromaDst1++ = Uc;
-				//*uChromaDst2++ = Vc;
-			}
-			/* 4x+2 2y+1 [b8, b9] */
-			else
-			{
+            }
+            /* 4x+2 2y+1 [b8, b9] */
+            else
+            {
                 *vChromaDst1 = Uc;
                 vChromaDst1 += 2;
 
-				*vChromaDst2 = Vc;
+                *vChromaDst2 = Vc;
                 vChromaDst2 += 2;
-
-                //Works but with issues
-                //*vChromaDst++ = Uc;
-                //*vChromaDst++ = Vc;
-
-                //OG version
-				//*vChromaDst1++ = Uc;
-				//*vChromaDst2++ = Vc;
-			}
-		}
-	}
+            }
+        }
+    }
 }
 
 static int general_RGBToAVC444YUVv2_ANY(const uint8_t* pSrc,
@@ -1209,88 +1351,40 @@ static int general_RGBToAVC444YUVv2_ANY(const uint8_t* pSrc,
                                         const BoxPtr rect,
                                         const uint32_t screen_width)
 {
-	if ((rect->y2 - rect->y1) < 1 || (rect->x2 - rect->x1) < 1)
-		return 1;
+    if ((rect->y2 - rect->y1) < 1 || (rect->x2 - rect->x1) < 1)
+        return 1;
 
     const int16_t half_screen_width = screen_width / 2;
     const int16_t quarter_screen_width = screen_width / 4;
     const uint16_t x = rect->x1;
     const uint16_t half_x = x / 2;
-    const uint16_t quarter_x = x / 4;
     uint16_t y;
-	for (y = rect->y1; y < rect->y2; y += 2)
-	{
-        // uint16_t half_y = y / 2;
-		// const uint8_t* srcEven = (pSrc + y * srcStep) + (x * 4);
-		// const uint8_t* srcOdd = (y < rect->y2 - 1) ? (srcEven + srcStep) : NULL;
-		// uint8_t* dstLumaYEven = (pDst1[0] + y * dst1Step[0]) + x;
-		// uint8_t* dstLumaYOdd = (dstLumaYEven + dst1Step[0]);
-		// uint8_t* dstLumaU = (pDst1[1] + half_y * dst1Step[1]) + half_x;
-		// uint8_t* dstLumaV = (pDst1[2] + half_y * dst1Step[2]) + half_x;
-		// uint8_t* dstEvenChromaY1 = (pDst2[0] + y * dst2Step[0]) + half_x;
-		// uint8_t* dstEvenChromaY2 = dstEvenChromaY1 + half_screen_width;
-		// uint8_t* dstOddChromaY1 = dstEvenChromaY1 + dst2Step[0];
-		// uint8_t* dstOddChromaY2 = dstEvenChromaY2 + dst2Step[0];
-		// uint8_t* dstChromaU1 = (pDst2[1] + half_y * dst2Step[1]) + quarter_x;
-		// uint8_t* dstChromaV1 = (pDst2[2] + half_y * dst2Step[2]) + quarter_x;
-		// uint8_t* dstChromaU2 = dstChromaU1 + quarter_screen_width;
-		// uint8_t* dstChromaV2 = dstChromaV1 + quarter_screen_width;
-		// general_RGBToAVC444YUVv2_ANY_DOUBLE_ROW(
-		//     srcEven, srcOdd, dstLumaYEven, dstLumaYOdd, dstLumaU, dstLumaV,
-		//     dstEvenChromaY1, dstEvenChromaY2, dstOddChromaY1, dstOddChromaY2, dstChromaU1,
-		//     dstChromaU2, dstChromaV1, dstChromaV2, rect);
-
-
-        // uint16_t half_y = y / 2;
-		// const uint8_t* srcEven = (pSrc + y * srcStep) + (x * 4);
-		// const uint8_t* srcOdd = (y < rect->y2 - 1) ? (srcEven + srcStep) : NULL;
-		// uint8_t* dstLumaYEven = (pDst1[0] + y * dst1Step[0]) + x;
-		// uint8_t* dstLumaYOdd = (dstLumaYEven + dst1Step[0]);
-		// uint8_t* dstLumaUV = (pDst1[1] + half_y * dst1Step[1]) + x;
-		// uint8_t* dstEvenChromaY1 = (pDst2[0] + y * dst2Step[0]) + x;
-		// uint8_t* dstEvenChromaY2 = dstEvenChromaY1 + half_screen_width;
-		// uint8_t* dstOddChromaY1 = dstEvenChromaY1 + dst2Step[0];
-		// uint8_t* dstOddChromaY2 = dstEvenChromaY2 + dst2Step[0];
-		// uint8_t* dstChromaU = (pDst2[1] + half_y * dst2Step[1]) + x;
-		// uint8_t* dstChromaV = dstChromaU + half_screen_width;
-		// general_RGBToAVC444YUVv2_ANY_DOUBLE_ROW(
-		//     srcEven, srcOdd, dstLumaYEven, dstLumaYOdd, dstLumaUV,
-		//     dstEvenChromaY1, dstEvenChromaY2, dstOddChromaY1, dstOddChromaY2,
-        //     dstChromaU, dstChromaV, rect);
-
+    for (y = rect->y1; y < rect->y2; y += 2)
+    {
         uint16_t half_y = y / 2;
-		const uint8_t* srcEven = (pSrc + y * srcStep) + (x * 4);
-		const uint8_t* srcOdd = (y < rect->y2 - 1) ? (srcEven + srcStep) : NULL;
-		uint8_t* dstLumaYEven = (pDst1[0] + y * dst1Step[0]) + x;
-		uint8_t* dstLumaYOdd = (dstLumaYEven + dst1Step[0]);
-		uint8_t* dstLumaUV = (pDst1[1] + half_y * dst1Step[1]) + x;
-		uint8_t* dstEvenChromaY1 = (pDst2[0] + y * dst2Step[0]) + half_x;
-		uint8_t* dstEvenChromaY2 = dstEvenChromaY1 + half_screen_width;
-		uint8_t* dstOddChromaY1 = dstEvenChromaY1 + dst2Step[0];
-		uint8_t* dstOddChromaY2 = dstEvenChromaY2 + dst2Step[0];
+        const uint8_t* srcEven = (pSrc + y * srcStep) + (x * 4);
+        const uint8_t* srcOdd = (y < rect->y2 - 1) ? (srcEven + srcStep) : NULL;
+        uint8_t* dstLumaYEven = (pDst1[0] + y * dst1Step[0]) + x;
+        uint8_t* dstLumaYOdd = (dstLumaYEven + dst1Step[0]);
+        uint8_t* dstLumaUV = (pDst1[1] + half_y * dst1Step[1]) + x;
+        uint8_t* dstEvenChromaY1 = (pDst2[0] + y * dst2Step[0]) + half_x;
+        uint8_t* dstEvenChromaY2 = dstEvenChromaY1 + half_screen_width;
+        uint8_t* dstOddChromaY1 = dstEvenChromaY1 + dst2Step[0];
+        uint8_t* dstOddChromaY2 = dstEvenChromaY2 + dst2Step[0];
         uint8_t* dstChromaU1 = (pDst2[1] + half_y * dst2Step[1]) + half_x;
-		uint8_t* dstChromaV1 = dstChromaU1 + 1;
-		uint8_t* dstChromaU2 = dstChromaU1 + half_screen_width;
-		uint8_t* dstChromaV2 = dstChromaV1 + half_screen_width;
-		general_RGBToAVC444YUVv2_ANY_DOUBLE_ROW(
-		    srcEven, srcOdd, dstLumaYEven, dstLumaYOdd, dstLumaUV,
-		    dstEvenChromaY1, dstEvenChromaY2, dstOddChromaY1, dstOddChromaY2,
+        uint8_t* dstChromaV1 = dstChromaU1 + 1;
+        uint8_t* dstChromaU2 = dstChromaU1 + half_screen_width;
+        uint8_t* dstChromaV2 = dstChromaV1 + half_screen_width;
+        general_RGBToAVC444YUVv2_ANY_DOUBLE_ROW(
+            srcEven, srcOdd, dstLumaYEven, dstLumaYOdd, dstLumaUV,
+            dstEvenChromaY1, dstEvenChromaY2, dstOddChromaY1, dstOddChromaY2,
             dstChromaU1, dstChromaU2, dstChromaV1, dstChromaV2, rect);
-	}
+    }
 
-	return 0;
+    return 0;
 }
 
-// int
-// a8r8g8b8_to_yuv444_709fr_box_streamV2_freerdp(const uint8_t *s8, int src_stride,
-//                                       uint8_t *dst_main_y, int dst_main_y_stride,
-//                                       uint8_t *dst_main_u, int dst_main_u_stride,
-//                                       uint8_t *dst_main_v, int dst_main_v_stride,
-//                                       uint8_t *dst_aux_y, int dst_aux_y_stride,
-//                                       uint8_t *dst_aux_u, int dst_aux_u_stride,
-//                                       uint8_t *dst_aux_v, int dst_aux_v_stride,
-//                                       const BoxPtr rect,
-//                                       int screen_width)
+
 int
 a8r8g8b8_to_yuv444_709fr_box_streamV2_freerdp(const uint8_t *s8, int src_stride,
                                       uint8_t *dst_main_y, int dst_main_y_stride,
@@ -1300,11 +1394,6 @@ a8r8g8b8_to_yuv444_709fr_box_streamV2_freerdp(const uint8_t *s8, int src_stride,
                                       const BoxPtr rect,
                                       int screen_width)
 {
-    // uint8_t* pDst1[3] = {dst_main_y, dst_main_u, dst_main_v};
-    // uint32_t pStep1[3] = {dst_main_y_stride, dst_main_u_stride, dst_main_v_stride};
-
-    // uint8_t* pDst2[3] = {dst_aux_y, dst_aux_u, dst_aux_v};
-    // uint32_t pStep2[3] = {dst_aux_y_stride, dst_aux_u_stride, dst_aux_v_stride};
     uint8_t* pDst1[2] = {dst_main_y, dst_main_uv};
     uint32_t pStep1[2] = {dst_main_y_stride, dst_main_uv_stride};
 
@@ -1377,89 +1466,22 @@ rdpCopyBox_yuv444_to_streamV2(rdpClientCon *clientCon,
     for (index = 0; index < num_rects; ++index)
     {
         const BoxPtr rect = rects + index;
-        a8r8g8b8_to_yuv444_709fr_box_streamV2_freerdp(s8, src_stride,
+        // a8r8g8b8_to_yuv444_709fr_box_streamV2_freerdp(s8, src_stride,
+        //                                       d8_main_y, dst_main_y_stride,
+        //                                       d8_main_uv, dst_main_uv_stride,
+        //                                       d8_aux_y, dst_aux_y_stride,
+        //                                       d8_aux_uv, dst_aux_uv_stride,
+        //                                       rect,
+        //                                       screen_width);
+        a8r8g8b8_to_yuv444_709fr_box_streamV2_cmp(s8, src_stride,
                                               d8_main_y, dst_main_y_stride,
                                               d8_main_uv, dst_main_uv_stride,
                                               d8_aux_y, dst_aux_y_stride,
                                               d8_aux_uv, dst_aux_uv_stride,
-                                              rect,
-                                              screen_width);
-
-        // a8r8g8b8_to_yuv444_709fr_box_streamV2_cmp(s8, src_stride,
-        //                                       d8_main_y, dst_main_y_stride,
-        //                                       d8_main_u, dst_main_u_stride,
-        //                                       d8_main_v, dst_main_v_stride,
-        //                                       d8_aux_y, dst_aux_y_stride,
-        //                                       d8_aux_u, dst_aux_u_stride,
-        //                                       d8_aux_v, dst_aux_v_stride,
-        //                                       rect->x1, rect->y1,
-        //                                       rect->x2 - rect->x1, rect->y2 - rect->y1,
-        //                                       screen_width, screen_height);
+                                              rect, screen_width - 2, screen_height - 2);
     }
     return 0;
 }
-
-
-// /* copy rects with no error checking */
-// static int
-// rdpCopyBox_yuv444_to_streamV2(rdpClientCon *clientCon,
-//                               const uint8_t *src, int src_stride,
-//                               uint8_t *dst_main_y, int dst_main_y_stride,
-//                               uint8_t *dst_main_u, int dst_main_u_stride,
-//                               uint8_t *dst_main_v, int dst_main_v_stride,
-//                               uint8_t *dst_aux_y, int dst_aux_y_stride,
-//                               uint8_t *dst_aux_u, int dst_aux_u_stride,
-//                               uint8_t *dst_aux_v, int dst_aux_v_stride,
-//                               int srcx, int srcy,
-//                               int dstx, int dsty,
-//                               const BoxPtr rects, int num_rects,
-//                               int screen_width, int screen_height)
-
-// {
-//     const uint8_t *s8;
-//     uint8_t *d8_main_y;
-//     uint8_t *d8_main_u;
-//     uint8_t *d8_main_v;
-//     uint8_t *d8_aux_y;
-//     uint8_t *d8_aux_u;
-//     uint8_t *d8_aux_v;
-//     int index;
-
-//     s8 = src;
-//     d8_main_y = dst_main_y;
-//     d8_main_u = dst_main_u;
-//     d8_main_v = dst_main_v;
-
-//     d8_aux_y = dst_aux_y;
-//     d8_aux_u = dst_aux_u;
-//     d8_aux_v = dst_aux_v;
-
-//     for (index = 0; index < num_rects; ++index)
-//     {
-//         const BoxPtr rect = rects + index;
-//         a8r8g8b8_to_yuv444_709fr_box_streamV2_freerdp(s8, src_stride,
-//                                               d8_main_y, dst_main_y_stride,
-//                                               d8_main_u, dst_main_u_stride,
-//                                               d8_main_v, dst_main_v_stride,
-//                                               d8_aux_y, dst_aux_y_stride,
-//                                               d8_aux_u, dst_aux_u_stride,
-//                                               d8_aux_v, dst_aux_v_stride,
-//                                               rect,
-//                                               screen_width);
-
-//         // a8r8g8b8_to_yuv444_709fr_box_streamV2_cmp(s8, src_stride,
-//         //                                       d8_main_y, dst_main_y_stride,
-//         //                                       d8_main_u, dst_main_u_stride,
-//         //                                       d8_main_v, dst_main_v_stride,
-//         //                                       d8_aux_y, dst_aux_y_stride,
-//         //                                       d8_aux_u, dst_aux_u_stride,
-//         //                                       d8_aux_v, dst_aux_v_stride,
-//         //                                       rect->x1, rect->y1,
-//         //                                       rect->x2 - rect->x1, rect->y2 - rect->y1,
-//         //                                       screen_width, screen_height);
-//     }
-//     return 0;
-// }
 
 /******************************************************************************/
 static Bool
