@@ -757,62 +757,38 @@ rdpCopyBox_a8r8g8b8_to_nv12_709fr(rdpClientCon *clientCon,
 }
 
 /******************************************************************************/
-/* copy rects with no error checking */
-static int
-rdpCopyBox_a8r8g8b8_to_yuv444_709fr(rdpClientCon *clientCon,
-                                    const uint8_t *src, int src_stride,
-                                    int srcx, int srcy,
-                                    uint8_t *dst, int dst_stride,
-                                    int dstx, int dsty,
-                                    BoxPtr rects, int num_rects)
-{
-    const uint8_t *s8;
-    uint8_t *d8;
-    int index;
-    int width;
-    int height;
-    BoxPtr box;
-
-    for (index = 0; index < num_rects; index++)
-    {
-        box = rects + index;
-        s8 = src + (box->y1 - srcy) * src_stride;
-        s8 += (box->x1 - srcx) * 4;
-        d8 = dst + (box->y1 - dsty) * dst_stride;
-        d8 += (box->x1 - dstx) * 4;
-        width = box->x2 - box->x1;
-        height = box->y2 - box->y1;
-        a8r8g8b8_to_yuv444_709fr_box(s8, src_stride,
-                                     d8, dst_stride,
-                                     width, height);
-    }
-    return 0;
-}
-
 #define MAX_LINEAR_COORDINATE(width, height, bytes_per_cell) \
     (((int)width) * ((int)height) * (bytes_per_cell))
 
+/******************************************************************************/
 #define XY_BYTE_COORDINATE(x, y, stride, bytes_per_cell) \
     ((((int)x) * bytes_per_cell) + (((int)y) * stride))
 
-uint8_t RGB2Y(uint32_t R, uint32_t G, uint32_t B)
+/******************************************************************************/
+static uint8_t
+RGB2Y(uint32_t R, uint32_t G, uint32_t B)
 {
     const uint32_t Y = (54lu * R + 183lu * G + 18lu * B) >> 8lu;
     return (uint8_t)RDPCLAMP(Y, 0, UCHAR_MAX);
 }
 
-uint8_t RGB2U(uint32_t R, uint32_t G, uint32_t B)
+/******************************************************************************/
+static uint8_t
+RGB2U(uint32_t R, uint32_t G, uint32_t B)
 {
     const uint32_t U = ((-29lu * R - 99lu * G + 128lu * B) >> 8lu) + 128lu;
     return (uint8_t)RDPCLAMP(U, 0, UCHAR_MAX);
 }
 
-uint8_t RGB2V(uint32_t R, uint32_t G, uint32_t B)
+/******************************************************************************/
+static uint8_t
+RGB2V(uint32_t R, uint32_t G, uint32_t B)
 {
     const uint32_t V = ((128lu * R - 116lu * G - 12lu * B) >> 8lu) + 128lu;
     return (uint8_t)RDPCLAMP(V, 0, UCHAR_MAX);
 }
 
+/******************************************************************************/
 static int
 extractY(const uint8_t *image_data, int16_t x, int16_t y, 
          int16_t width, int16_t height, int image_stride, 
@@ -845,6 +821,7 @@ extractU(const uint8_t *image_data, int16_t x, int16_t y,
     return 0;
 }
 
+/******************************************************************************/
 static int
 extractV(const uint8_t *image_data, int16_t x, int16_t y, 
          int16_t width, int16_t height, int image_stride, 
@@ -997,6 +974,7 @@ a8r8g8b8_to_yuv444_709fr_box_streamV2_cmp(const uint8_t *s8, int src_stride,
     return 0;
 }
 
+/******************************************************************************/
 static void general_RGBToAVC444YUVv2_ANY_DOUBLE_ROW(
     const uint8_t* srcEven, const uint8_t* srcOdd,
     uint8_t* yLumaDstEven, uint8_t* yLumaDstOdd, uint8_t* uvLumaDst,
@@ -1127,6 +1105,7 @@ static void general_RGBToAVC444YUVv2_ANY_DOUBLE_ROW(
     }
 }
 
+/******************************************************************************/
 static int general_RGBToAVC444YUVv2_ANY(const uint8_t* pSrc,
                                         uint32_t srcStep, 
                                         uint8_t* pDst1[3],
@@ -1140,7 +1119,6 @@ static int general_RGBToAVC444YUVv2_ANY(const uint8_t* pSrc,
         return 1;
 
     const int16_t half_screen_width = screen_width / 2;
-    const int16_t quarter_screen_width = screen_width / 4;
     const uint16_t x = rect->x1;
     const uint16_t half_x = x / 2;
     uint16_t y;
@@ -1169,7 +1147,7 @@ static int general_RGBToAVC444YUVv2_ANY(const uint8_t* pSrc,
     return 0;
 }
 
-
+/******************************************************************************/
 int
 a8r8g8b8_to_yuv444_709fr_box_streamV2_freerdp(const uint8_t *s8, int src_stride,
                                       uint8_t *dst_main_y, int dst_main_y_stride,
@@ -1201,7 +1179,9 @@ struct xrdp_rectangle
     int16_t	x, y, width, height;
 };
 
-void snapRectangleToGrid(struct xrdp_rectangle *rect_buffer)
+/******************************************************************************/
+static void
+snapRectangleToGrid(struct xrdp_rectangle *rect_buffer)
 {
     LLOGLN(10, ("snapRectangleToGrid:"));
     // Round x and y down to nearest multiple of 16
@@ -1220,7 +1200,7 @@ void snapRectangleToGrid(struct xrdp_rectangle *rect_buffer)
     rect_buffer->height += y_diff;
 }
 
-// /* copy rects with no error checking */
+/******************************************************************************/
 static int
 rdpCopyBox_yuv444_to_streamV2(rdpClientCon *clientCon,
                               const uint8_t *src, int src_stride,
@@ -1251,19 +1231,19 @@ rdpCopyBox_yuv444_to_streamV2(rdpClientCon *clientCon,
     for (index = 0; index < num_rects; ++index)
     {
         const BoxPtr rect = rects + index;
-        // a8r8g8b8_to_yuv444_709fr_box_streamV2_freerdp(s8, src_stride,
-        //                                       d8_main_y, dst_main_y_stride,
-        //                                       d8_main_uv, dst_main_uv_stride,
-        //                                       d8_aux_y, dst_aux_y_stride,
-        //                                       d8_aux_uv, dst_aux_uv_stride,
-        //                                       rect,
-        //                                       screen_width);
-        a8r8g8b8_to_yuv444_709fr_box_streamV2_cmp(s8, src_stride,
+        a8r8g8b8_to_yuv444_709fr_box_streamV2_freerdp(s8, src_stride,
                                               d8_main_y, dst_main_y_stride,
                                               d8_main_uv, dst_main_uv_stride,
                                               d8_aux_y, dst_aux_y_stride,
                                               d8_aux_uv, dst_aux_uv_stride,
-                                              rect, screen_width, screen_height);
+                                              rect,
+                                              screen_width);
+        // a8r8g8b8_to_yuv444_709fr_box_streamV2_cmp(s8, src_stride,
+        //                                       d8_main_y, dst_main_y_stride,
+        //                                       d8_main_uv, dst_main_uv_stride,
+        //                                       d8_aux_y, dst_aux_y_stride,
+        //                                       d8_aux_uv, dst_aux_uv_stride,
+        //                                       rect, screen_width, screen_height);
     }
     return 0;
 }
@@ -1786,7 +1766,6 @@ rdpCapture3(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
     Bool rv;
     const uint8_t *src;
     uint8_t *dst;
-    uint8_t *dst_aux;
     int src_stride;
     int dst_stride;
     int dst_format;
@@ -1879,29 +1858,6 @@ rdpCapture3(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
     {
         int full_size = clientCon->cap_width * clientCon->cap_height;
         int half_size = full_size / 2;
-        int quarter_size = full_size / 4;
-        int half_stride = dst_stride / 2;
-
-        // rdpCopyBox_yuv444_to_streamV2(clientCon,
-        //                               //src
-        //                               src, src_stride,
-        //                               //dst_main_y
-        //                               dst, dst_stride,
-        //                               //dst_main_u
-        //                               dst + full_size, half_stride,
-        //                               //dst_main_v
-        //                               dst + full_size + quarter_size, half_stride,
-        //                               //dst_aux_y
-        //                               dst + full_size + half_size, dst_stride,
-        //                               //dst_aux_u
-        //                               dst + 2 * full_size + half_size, half_stride,
-        //                               //dst_aux_v
-        //                               dst + 2 * full_size + half_size + quarter_size, half_stride,
-        //                               0, 0,
-        //                               0, 0,
-        //                               *out_rects, num_rects,
-        //                               clientCon->cap_width, clientCon->cap_height);
-        
         rdpCopyBox_yuv444_to_streamV2(clientCon,
                                 //src
                                 src, src_stride,
