@@ -1830,7 +1830,7 @@ rdpCapture3(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
         /* copy vmem to vmem */
         rv = rdpCopyBoxList(clientCon, clientCon->helperPixmaps[0],
                             *out_rects, *num_out_rects);
-        id->flags |= ENCODE_COMPLETE;
+        id->flags = ENCODE_COMPLETE;
         return rv;
         /* helper will do the rest */
     }
@@ -1857,18 +1857,12 @@ rdpCapture3(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
     else if (dst_format == XRDP_yuv444_709fr)
     {
         int full_size = clientCon->cap_width * clientCon->cap_height;
-        int half_size = full_size / 2;
         rdpCopyBox_yuv444_to_streamV2(clientCon,
-                                //src
                                 src, src_stride,
-                                //dst_main_y
                                 dst, dst_stride,
-                                //dst_main_uv
                                 dst + full_size, dst_stride,
-                                //dst_aux_y
-                                dst + full_size + half_size, dst_stride,
-                                //dst_aux_uv
-                                dst + 2 * full_size + half_size, dst_stride,
+                                dst + full_size * 3 / 2, dst_stride,
+                                dst + full_size * 5 / 2, dst_stride,
                                 0, 0,
                                 0, 0,
                                 *out_rects, num_rects,
