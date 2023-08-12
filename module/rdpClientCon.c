@@ -2697,7 +2697,7 @@ rdpClientConSendPaintRectShmEx(rdpPtr dev, rdpClientCon *clientCon,
     // if (id->flags && CONTAINS_DUAL_FRAME_AVC444) {
     //     ++clientCon->rect_id;
     // }
-    //++clientCon->rect_id;
+    ++clientCon->rect_id;
     out_uint32_le(s, id->shmem_id);
     out_uint32_le(s, id->shmem_offset);
     out_uint16_le(s, clientCon->cap_width);

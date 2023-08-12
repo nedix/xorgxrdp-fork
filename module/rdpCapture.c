@@ -1186,13 +1186,13 @@ snapRectangleToGrid(struct xrdp_rectangle *rect_buffer)
     LLOGLN(10, ("snapRectangleToGrid:"));
     // Round x and y down to nearest multiple of 16
     rect_buffer->x = (rect_buffer->x / 16) * 16;
-    rect_buffer->y = (rect_buffer->y / 16) * 16;
+    rect_buffer->y = (rect_buffer->y / 64) * 64;
     // Round width and height up to nearest multiple of 16
     rect_buffer->width = ((rect_buffer->width + 15) / 16) * 16;
-    rect_buffer->height = ((rect_buffer->height + 15) / 16) * 16;
+    rect_buffer->height = ((rect_buffer->height + 63) / 64) * 64;
     // Calculate new x and y coordinates
     int x_diff = rect_buffer->x % 16;
-    int y_diff = rect_buffer->y % 16;
+    int y_diff = rect_buffer->y % 64;
     rect_buffer->x -= x_diff;
     rect_buffer->y -= y_diff;
     // Add any difference to width and height
