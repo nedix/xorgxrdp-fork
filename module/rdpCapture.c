@@ -46,6 +46,10 @@ capture
 #include "rdpMisc.h"
 #include "rdpCapture.h"
 
+#include "wyhash.h"
+/* hex digits of pi as a 64 bit int */
+#define WYHASH_SEED 0x3243f6a8885a308dull
+
 #if defined(XORGXRDP_GLAMOR)
 #include "rdpEgl.h"
 #include <glamor.h>
@@ -848,7 +852,7 @@ rdpCapture2(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
     int dst_stride;
     int crc_offset;
     int crc_stride;
-    int crc;
+    uint64_t crc;
     int num_crcs;
     int mon_index;
 
@@ -887,7 +891,7 @@ rdpCapture2(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
         /* resize the crc list */
         clientCon->num_rfx_crcs_alloc[mon_index] = num_crcs;
         free(clientCon->rfx_crcs[mon_index]);
-        clientCon->rfx_crcs[mon_index] = g_new0(int, num_crcs);
+        clientCon->rfx_crcs[mon_index] = g_new0(uint64_t, num_crcs);
     }
 
     extents_rect = *rdpRegionExtents(in_reg);
@@ -913,7 +917,8 @@ rdpCapture2(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
             }
             else
             {
-                crc = crc_start();
+                /* hex digits of pi as a 64 bit int */
+                crc = WYHASH_SEED;
                 if (rcode == rgnPART)
                 {
                     LLOGLN(10, ("rdpCapture2: rgnPART"));
@@ -922,8 +927,7 @@ rdpCapture2(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
                     rdpRegionIntersect(&tile_reg, in_reg, &tile_reg);
                     rects = REGION_RECTS(&tile_reg);
                     num_rects = REGION_NUM_RECTS(&tile_reg);
-                    crc = crc_process_data(crc, rects,
-                                           num_rects * sizeof(BoxRec));
+                    crc = wyhash((const void*)rects, num_rects * sizeof(BoxRec), crc, _wyp);
                     rdpCopyBox_a8r8g8b8_to_yuvalp(x, y,
                                                   src, src_stride,
                                                   dst, dst_stride,
@@ -939,11 +943,10 @@ rdpCapture2(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
                                                   &rect, 1);
                 }
                 crc_dst = dst + (y << 8) * (dst_stride >> 8) + (x << 8);
-                crc = crc_process_data(crc, crc_dst, 64 * 64 * 4);
-                crc = crc_end(crc);
+                crc = wyhash((const void*)crc_dst, 64 * 64 * 4, crc, _wyp);
                 crc_offset = (y / XRDP_RFX_ALIGN) * crc_stride 
                              + (x / XRDP_RFX_ALIGN);
-                LLOGLN(10, ("rdpCapture2: crc 0x%8.8x 0x%8.8x",
+                LLOGLN(10, ("rdpCapture2: crc 0x%" PRIx64 " 0x%" PRIx64,
                        crc, clientCon->rfx_crcs[mon_index][crc_offset]));
                 if (crc == clientCon->rfx_crcs[mon_index][crc_offset])
                 {
