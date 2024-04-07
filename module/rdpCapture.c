@@ -599,10 +599,11 @@ wyhash_rfx_tile(const uint8_t *src, int src_stride, int x, int y, uint64_t seed)
     uint64_t hash;
     const uint8_t *s8;
     hash = seed;
+    s8 = src + (y * src_stride) + (x * 4);
     for(row = 0; row < 64; row++)
     {
-        s8 = src + (y+row) * src_stride + x * 4;
         hash = wyhash((const void*)s8, 64 * 4, hash, _wyp);
+        s8 += src_stride;
     }
     return hash;
 }
