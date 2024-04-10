@@ -576,7 +576,7 @@ rdpEglOut(rdpClientCon *clientCon, struct rdp_egl *egl, RegionPtr in_reg,
         /* resize the crc list */
         clientCon->num_rfx_crcs_alloc[mon_index] = num_crcs;
         free(clientCon->rfx_crcs[mon_index]);
-        clientCon->rfx_crcs[mon_index] = g_new0(int, num_crcs);
+        clientCon->rfx_crcs[mon_index] = g_new0(uint64_t, num_crcs);
     }
     tile_extents_stride = (tile_extents_rect->x2 - tile_extents_rect->x1) / 64;
     out_rect_index = 0;
@@ -614,7 +614,8 @@ rdpEglOut(rdpClientCon *clientCon, struct rdp_egl *egl, RegionPtr in_reg,
                 crc = crc_end(crc);
                 if (crc != crcs[(ly / 64) * tile_extents_stride + (lx / 64)])
                 {
-                    LLOGLN(0, ("rdpEglOut: error crc no match 0x%8.8x 0x%8.8x",
+                    LLOGLN(0, ("rdpEglOut: error crc no match "
+                           "0x%" PRIx64 " 0x%" PRIx64,
                            crc,
                            crcs[(ly / 64) * tile_extents_stride + (lx / 64)]));
                 }
