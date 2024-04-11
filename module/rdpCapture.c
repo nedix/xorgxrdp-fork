@@ -124,24 +124,18 @@ rdpFillBox_yuvalp(int ax, int ay,
 /* 19595  38470   7471
   -11071 -21736  32807
    32756 -27429  -5327 */
-static int
-rdpCopyBox_a8r8g8b8_to_yuvalp(int ax, int ay,
-                              const uint8_t *src, int src_stride,
-                              uint8_t *dst, int dst_stride,
-                              BoxPtr rects, int num_rects)
+int
+a8r8g8b8_to_yuvalp_box(const uint8_t *s8, int src_stride,
+                       uint8_t *d8, int dst_stride,
+                       int width, int height)
 {
-    const uint8_t *s8;
-    uint8_t *d8;
     uint8_t *yptr;
     uint8_t *uptr;
     uint8_t *vptr;
     uint8_t *aptr;
     const uint32_t *s32;
-    int index;
     int jndex;
     int kndex;
-    int width;
-    int height;
     uint32_t pixel;
     uint8_t a;
     int r;
@@ -150,6 +144,51 @@ rdpCopyBox_a8r8g8b8_to_yuvalp(int ax, int ay,
     int y;
     int u;
     int v;
+
+    for (jndex = 0; jndex < height; jndex++)
+    {
+        s32 = (const uint32_t *) s8;
+        yptr = d8;
+        uptr = yptr + 64 * 64;
+        vptr = uptr + 64 * 64;
+        aptr = vptr + 64 * 64;
+        kndex = 0;
+        while (kndex < width)
+        {
+            pixel = *(s32++);
+            RGB_SPLIT(a, r, g, b, pixel);
+            y = (r *  19595 + g *  38470 + b *   7471) >> 16;
+            u = (r * -11071 + g * -21736 + b *  32807) >> 16;
+            v = (r *  32756 + g * -27429 + b *  -5327) >> 16;
+            u = u + 128;
+            v = v + 128;
+            y = RDPCLAMP(y, 0, UCHAR_MAX);
+            u = RDPCLAMP(u, 0, UCHAR_MAX);
+            v = RDPCLAMP(v, 0, UCHAR_MAX);
+            *(yptr++) = y;
+            *(uptr++) = u;
+            *(vptr++) = v;
+            *(aptr++) = a;
+            kndex++;
+        }
+        d8 += dst_stride;
+        s8 += src_stride;
+    }
+    return 0;
+}
+
+/******************************************************************************/
+static int
+rdpCopyBox_a8r8g8b8_to_yuvalp(rdpClientCon *clientCon, int ax, int ay,
+                              const uint8_t *src, int src_stride,
+                              uint8_t *dst, int dst_stride,
+                              BoxPtr rects, int num_rects)
+{
+    const uint8_t *s8;
+    uint8_t *d8;
+    int index;
+    int width;
+    int height;
     BoxPtr box;
 
     dst = dst + (ay << 8) * (dst_stride >> 8) + (ax << 8);
@@ -162,35 +201,9 @@ rdpCopyBox_a8r8g8b8_to_yuvalp(int ax, int ay,
         d8 += box->x1 - ax;
         width = box->x2 - box->x1;
         height = box->y2 - box->y1;
-        for (jndex = 0; jndex < height; jndex++)
-        {
-            s32 = (const uint32_t *) s8;
-            yptr = d8;
-            uptr = yptr + 64 * 64;
-            vptr = uptr + 64 * 64;
-            aptr = vptr + 64 * 64;
-            kndex = 0;
-            while (kndex < width)
-            {
-                pixel = *(s32++);
-                RGB_SPLIT(a, r, g, b, pixel);
-                y = (r *  19595 + g *  38470 + b *   7471) >> 16;
-                u = (r * -11071 + g * -21736 + b *  32807) >> 16;
-                v = (r *  32756 + g * -27429 + b *  -5327) >> 16;
-                u = u + 128;
-                v = v + 128;
-                y = RDPCLAMP(y, 0, UCHAR_MAX);
-                u = RDPCLAMP(u, 0, UCHAR_MAX);
-                v = RDPCLAMP(v, 0, UCHAR_MAX);
-                *(yptr++) = y;
-                *(uptr++) = u;
-                *(vptr++) = v;
-                *(aptr++) = a;
-                kndex++;
-            }
-            d8 += 64;
-            s8 += src_stride;
-        }
+        clientCon->dev->a8r8g8b8_to_yuvalp_box(s8, src_stride,
+                                               d8, 64,
+                                               width, height);
     }
     return 0;
 }
@@ -946,7 +959,7 @@ rdpCapture2(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
                     rects = REGION_RECTS(&tile_reg);
                     num_rects = REGION_NUM_RECTS(&tile_reg);
                     crc = wyhash((const void*)rects, num_rects * sizeof(BoxRec), crc, _wyp);
-                    rdpCopyBox_a8r8g8b8_to_yuvalp(x, y,
+                    rdpCopyBox_a8r8g8b8_to_yuvalp(clientCon, x, y,
                                                   src, src_stride,
                                                   dst, dst_stride,
                                                   rects, num_rects);
@@ -975,7 +988,7 @@ rdpCapture2(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
                     /* lazily only do this if hash wasn't identical */
                     if (rcode != rgnPART)
                     {
-                        rdpCopyBox_a8r8g8b8_to_yuvalp(x, y,
+                        rdpCopyBox_a8r8g8b8_to_yuvalp(clientCon, x, y,
                                 src, src_stride,
                                 dst, dst_stride,
                                 &rect, 1);
