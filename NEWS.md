@@ -1,4 +1,34 @@
-# Release notes for xrdp v0.10.0 (2024/03/10)
+# Release notes for xorgxrdp v0.10.1 (2024/04/20)
+
+## General announcements
+The biggest news of v0.10 is that [Graphic Pipeline Extension](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-rdpegfx/da5c75f9-cd99-450c-98c4-014a496942b0) also called GFX in short has been supported. xrdp v0.10 with GFX achieves more frame rates and less bandwidth compared to v0.9. There is a significant performance improvement especially if the client is Windows 11's mstsc.exe or Microsoft Remote Desktop for Mac. GFX H.264/AVC 444 mode and hardware-accelerated encoding are not supported in this version yet.
+
+GFX implementation in xrdp is sponsored by an enterprise sponsor. @CyberTrust is also one of the sponsors. We very much appreciate the sponsorship. It helped us to accelerate xrdp development and land GFX earlier!
+
+Please consider sponsoring or making a donation to the project if you like xrdp. We accept financial contributions via [Open Collective](https://opencollective.com/xrdp-project). Direct donations to each developer via GitHub Sponsors are also welcomed.
+
+## Security fixes
+None
+
+## New features
+- Switch to wyhash from CRC for capture tile diff and introduce lazy color conversion (#167 #301)
+    - Thanks to @trishume!
+
+## Bug fixes
+None
+
+## Internal changes
+None
+
+## Known issues
+None
+
+## Changes for packagers or developers
+- If moving from v0.9.x, read the '[Significant changes for packagers or developers section](#significant-changes-for-packagers-or-developers)' for the v0.10 branch below.
+
+-----------------------
+
+# Release notes for xorgxrdp v0.10.0 (2024/03/10)
 
 This section notes changes since the [v0.10 branch](#branch-v010) was created. 
 
