@@ -1,16 +1,25 @@
-#!/bin/sh
+#!/bin/bash
 
 # Test that Xorg can load the compiled modules
 
 # X server to run
 if [ -z "$XORG" ]; then
-    if [ -x /usr/lib/xorg/Xorg ]; then
-        # Don't use the Ubuntu wrapped server
-        XORG=/usr/lib/xorg/Xorg
-    elif [ -x /usr/lib/Xorg ]; then
-        # Don't use the Arch Linux wrapped server
-        XORG=/usr/lib/Xorg
-    else
+    xorg_paths=(
+        /usr/local/libexec/Xorg
+        /usr/libexec/Xorg
+        /usr/lib/xorg/Xorg
+        /usr/lib/Xorg
+        /usr/bin/Xorg
+    )
+
+    for path in "${xorg_paths[@]}"; do
+        if [ -x "$path" ]; then
+            XORG=$path
+            break
+        fi
+    done
+
+    if [ -z "$XORG" ]; then
         XORG=Xorg
     fi
 fi
