@@ -2,25 +2,30 @@
 
 # Test that Xorg can load the compiled modules
 
+FindXorg()
+{
+  set -- \
+    /usr/local/libexec/Xorg \
+    /usr/libexec/Xorg \
+    /usr/lib/xorg/Xorg \
+    /usr/lib/Xorg \
+    /usr/bin/Xorg
+
+  for path in "$@"; do
+    if [ -x "$path" ]; then
+      echo "$path"
+      exit
+    fi
+  done
+
+  if [ -z "$XORG" ]; then
+    echo 'Xorg'
+  fi
+}
+
 # X server to run
 if [ -z "$XORG" ]; then
-    set -- \
-        /usr/local/libexec/Xorg \
-        /usr/libexec/Xorg \
-        /usr/lib/xorg/Xorg \
-        /usr/lib/Xorg \
-        /usr/bin/Xorg
-
-    for path in "$@"; do
-        if [ -x "$path" ]; then
-            XORG=$path
-            break
-        fi
-    done
-
-    if [ -z "$XORG" ]; then
-        XORG=Xorg
-    fi
+  XORG=`FindXorg`
 fi
 
 # Client to connect to Xorg
