@@ -7,6 +7,9 @@ if [ -z "$XORG" ]; then
     if [ -x /usr/lib/xorg/Xorg ]; then
         # Don't use the Ubuntu wrapped server
         XORG=/usr/lib/xorg/Xorg
+    elif [ -x /usr/lib/Xorg ]; then
+        # Don't use the Arch Linux wrapped server
+        XORG=/usr/lib/Xorg
     else
         XORG=Xorg
     fi
