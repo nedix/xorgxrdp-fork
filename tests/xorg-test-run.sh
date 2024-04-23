@@ -1,18 +1,17 @@
-#!/bin/bash
+#!/bin/sh
 
 # Test that Xorg can load the compiled modules
 
 # X server to run
 if [ -z "$XORG" ]; then
-    xorg_paths=(
-        /usr/local/libexec/Xorg
-        /usr/libexec/Xorg
-        /usr/lib/xorg/Xorg
-        /usr/lib/Xorg
+    set -- \
+        /usr/local/libexec/Xorg \
+        /usr/libexec/Xorg \
+        /usr/lib/xorg/Xorg \
+        /usr/lib/Xorg \
         /usr/bin/Xorg
-    )
 
-    for path in "${xorg_paths[@]}"; do
+    for path in "$@"; do
         if [ -x "$path" ]; then
             XORG=$path
             break
