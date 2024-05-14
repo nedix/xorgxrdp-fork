@@ -1216,17 +1216,6 @@ rdpCapture3(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
                                         dst, dst_stride, 0, 0,
                                         *out_rects, num_rects);
     }
-    else if (dst_format == XRDP_nv12_709fr)
-    {
-        dst_uv = dst;
-        dst_uv += clientCon->cap_width * clientCon->cap_height;
-        rdpCopyBox_a8r8g8b8_to_nv12_709fr(clientCon,
-                                          src, src_stride, 0, 0,
-                                          dst, dst_stride,
-                                          dst_uv, dst_stride,
-                                          0, 0,
-                                          *out_rects, num_rects);
-    }
     else if (dst_format == XRDP_nv12)
     {
         dst_uv = dst;
@@ -1241,6 +1230,91 @@ rdpCapture3(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
     else
     {
         LLOGLN(0, ("rdpCapture3: unimplemented color conversion"));
+    }
+
+    return rv;
+}
+
+/******************************************************************************/
+/* make out_rects always multiple of 2 width and height */
+static Bool
+rdpCapture5(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
+            int *num_out_rects, struct image_data *id)
+{
+    BoxPtr psrc_rects;
+    BoxRec rect;
+    int num_rects;
+    int index;
+    uint8_t *dst_uv;
+    Bool rv;
+    const uint8_t *src;
+    uint8_t *dst;
+    int src_stride;
+    int dst_stride;
+    int dst_format;
+
+    LLOGLN(10, ("rdpCapture5:"));
+
+    if (!isShmStatusActive(clientCon->shmemstatus))
+    {
+        LLOGLN(0, ("rdpCapture5: WARNING -- Shared memory is not configured."
+               " Aborting capture!"));
+        return FALSE;
+    }
+
+    rv = TRUE;
+
+    rdpRegionTranslate(in_reg, -id->left, -id->top);
+
+    num_rects = REGION_NUM_RECTS(in_reg);
+    psrc_rects = REGION_RECTS(in_reg);
+
+    if (num_rects < 1)
+    {
+        return FALSE;
+    }
+
+    *num_out_rects = num_rects;
+
+    *out_rects = g_new(BoxRec, num_rects * 4);
+    index = 0;
+    while (index < num_rects)
+    {
+        rect = psrc_rects[index];
+        LLOGLN(10, ("old x1 %d y1 %d x2 %d y2 %d", rect.x1, rect.x2,
+               rect.x2, rect.y2));
+        rect.x1 -= rect.x1 & 1;
+        rect.y1 -= rect.y1 & 1;
+        rect.x2 += rect.x2 & 1;
+        rect.y2 += rect.y2 & 1;
+        LLOGLN(10, ("new x1 %d y1 %d x2 %d y2 %d", rect.x1, rect.x2,
+               rect.x2, rect.y2));
+        (*out_rects)[index] = rect;
+        index++;
+    }
+
+    src = id->pixels;
+    dst = id->shmem_pixels;
+    dst_format = clientCon->rdp_format;
+    src_stride = id->lineBytes;
+    dst_stride = id->width;
+
+    src = src + src_stride * id->top + id->left * 4;
+
+    if (dst_format == XRDP_nv12_709fr)
+    {
+        dst_uv = dst;
+        dst_uv += id->width * id->height;
+        rdpCopyBox_a8r8g8b8_to_nv12_709fr(clientCon,
+                                          src, src_stride, 0, 0,
+                                          dst, dst_stride,
+                                          dst_uv, dst_stride,
+                                          0, 0,
+                                          *out_rects, num_rects);
+    }
+    else
+    {
+        LLOGLN(0, ("rdpCapture5: unimplemented color conversion"));
     }
 
     return rv;
@@ -1338,10 +1412,11 @@ rdpCapture(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
         case 4: /* GFX progressive */
             return rdpCapture2(clientCon, in_reg, out_rects, num_out_rects, id);
         case 3: /* surface command h264 */
-            /* FALLTHROUGH */
-        case 5: /* GFX h264 */
             /* used for even align capture */
             return rdpCapture3(clientCon, in_reg, out_rects, num_out_rects, id);
+        case 5: /* GFX h264 */
+            /* used for even align capture */
+            return rdpCapture5(clientCon, in_reg, out_rects, num_out_rects, id);
         default:
             LLOGLN(0, ("rdpCapture: mode %d not implemented", mode));
             break;
