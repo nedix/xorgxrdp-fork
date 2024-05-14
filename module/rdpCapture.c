@@ -554,6 +554,103 @@ a8r8g8b8_to_nv12_box(const uint8_t *s8, int src_stride,
 }
 
 /******************************************************************************/
+int
+a8r8g8b8_to_nv12_709fr_box(const uint8_t *s8, int src_stride,
+                           uint8_t *d8_y, int dst_stride_y,
+                           uint8_t *d8_uv, int dst_stride_uv,
+                           int width, int height)
+{
+    int index;
+    int jndex;
+    int R;
+    int G;
+    int B;
+    int Y;
+    int U;
+    int V;
+    int U_sum;
+    int V_sum;
+    int pixel;
+    const uint32_t *s32a;
+    const uint32_t *s32b;
+    uint8_t *d8ya;
+    uint8_t *d8yb;
+    uint8_t *d8uv;
+
+    for (jndex = 0; jndex < height; jndex += 2)
+    {
+        s32a = (const uint32_t *) (s8 + src_stride * jndex);
+        s32b = (const uint32_t *) (s8 + src_stride * (jndex + 1));
+        d8ya = d8_y + dst_stride_y * jndex;
+        d8yb = d8_y + dst_stride_y * (jndex + 1);
+        d8uv = d8_uv + dst_stride_uv * (jndex / 2);
+        for (index = 0; index < width; index += 2)
+        {
+            U_sum = 0;
+            V_sum = 0;
+
+            pixel = s32a[0];
+            s32a++;
+            R = (pixel >> 16) & 0xff;
+            G = (pixel >>  8) & 0xff;
+            B = (pixel >>  0) & 0xff;
+            Y =  ( 54 * R + 183 * G +  18 * B) >> 8;
+            U = ((-29 * R -  99 * G + 128 * B) >> 8) + 128;
+            V = ((128 * R - 116 * G -  12 * B) >> 8) + 128;
+            d8ya[0] = RDPCLAMP(Y, 0, 255);
+            d8ya++;
+            U_sum += RDPCLAMP(U, 0, 255);
+            V_sum += RDPCLAMP(V, 0, 255);
+
+            pixel = s32a[0];
+            s32a++;
+            R = (pixel >> 16) & 0xff;
+            G = (pixel >>  8) & 0xff;
+            B = (pixel >>  0) & 0xff;
+            Y =  ( 54 * R + 183 * G +  18 * B) >> 8;
+            U = ((-29 * R -  99 * G + 128 * B) >> 8) + 128;
+            V = ((128 * R - 116 * G -  12 * B) >> 8) + 128;
+            d8ya[0] = RDPCLAMP(Y, 0, 255);
+            d8ya++;
+            U_sum += RDPCLAMP(U, 0, 255);
+            V_sum += RDPCLAMP(V, 0, 255);
+
+            pixel = s32b[0];
+            s32b++;
+            R = (pixel >> 16) & 0xff;
+            G = (pixel >>  8) & 0xff;
+            B = (pixel >>  0) & 0xff;
+            Y =  ( 54 * R + 183 * G +  18 * B) >> 8;
+            U = ((-29 * R -  99 * G + 128 * B) >> 8) + 128;
+            V = ((128 * R - 116 * G -  12 * B) >> 8) + 128;
+            d8yb[0] = RDPCLAMP(Y, 0, 255);
+            d8yb++;
+            U_sum += RDPCLAMP(U, 0, 255);
+            V_sum += RDPCLAMP(V, 0, 255);
+
+            pixel = s32b[0];
+            s32b++;
+            R = (pixel >> 16) & 0xff;
+            G = (pixel >>  8) & 0xff;
+            B = (pixel >>  0) & 0xff;
+            Y =  ( 54 * R + 183 * G +  18 * B) >> 8;
+            U = ((-29 * R -  99 * G + 128 * B) >> 8) + 128;
+            V = ((128 * R - 116 * G -  12 * B) >> 8) + 128;
+            d8yb[0] = RDPCLAMP(Y, 0, 255);
+            d8yb++;
+            U_sum += RDPCLAMP(U, 0, 255);
+            V_sum += RDPCLAMP(V, 0, 255);
+
+            d8uv[0] = (U_sum + 2) / 4;
+            d8uv++;
+            d8uv[0] = (V_sum + 2) / 4;
+            d8uv++;
+        }
+    }
+    return 0;
+}
+
+/******************************************************************************/
 /* copy rects with no error checking */
 static int
 rdpCopyBox_a8r8g8b8_to_nv12(rdpClientCon *clientCon,
@@ -586,6 +683,44 @@ rdpCopyBox_a8r8g8b8_to_nv12(rdpClientCon *clientCon,
                                              d8_y, dst_stride_y,
                                              d8_uv, dst_stride_uv,
                                              width, height);
+    }
+    return 0;
+}
+
+/******************************************************************************/
+/* copy rects with no error checking */
+static int
+rdpCopyBox_a8r8g8b8_to_nv12_709fr(rdpClientCon *clientCon,
+                                  const uint8_t *src, int src_stride,
+                                  int srcx, int srcy,
+                                  uint8_t *dst_y, int dst_stride_y,
+                                  uint8_t *dst_uv, int dst_stride_uv,
+                                  int dstx, int dsty,
+                                  BoxPtr rects, int num_rects)
+{
+    const uint8_t *s8;
+    uint8_t *d8_y;
+    uint8_t *d8_uv;
+    int index;
+    int width;
+    int height;
+    BoxPtr box;
+
+    for (index = 0; index < num_rects; index++)
+    {
+        box = rects + index;
+        s8 = src + (box->y1 - srcy) * src_stride;
+        s8 += (box->x1 - srcx) * 4;
+        d8_y = dst_y + (box->y1 - dsty) * dst_stride_y;
+        d8_y += (box->x1 - dstx) * 1;
+        d8_uv = dst_uv + ((box->y1 - dsty) / 2) * dst_stride_uv;
+        d8_uv += (box->x1 - dstx) * 1;
+        width = box->x2 - box->x1;
+        height = box->y2 - box->y1;
+        clientCon->dev->a8r8g8b8_to_nv12_709fr_box(s8, src_stride,
+                                                   d8_y, dst_stride_y,
+                                                   d8_uv, dst_stride_uv,
+                                                   width, height);
     }
     return 0;
 }
@@ -1081,6 +1216,17 @@ rdpCapture3(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
                                         dst, dst_stride, 0, 0,
                                         *out_rects, num_rects);
     }
+    else if (dst_format == XRDP_nv12_709fr)
+    {
+        dst_uv = dst;
+        dst_uv += clientCon->cap_width * clientCon->cap_height;
+        rdpCopyBox_a8r8g8b8_to_nv12_709fr(clientCon,
+                                          src, src_stride, 0, 0,
+                                          dst, dst_stride,
+                                          dst_uv, dst_stride,
+                                          0, 0,
+                                          *out_rects, num_rects);
+    }
     else if (dst_format == XRDP_nv12)
     {
         dst_uv = dst;
@@ -1187,12 +1333,13 @@ rdpCapture(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
             return rdpCapture0(clientCon, in_reg, out_rects, num_out_rects, id);
         case 1:
             return rdpCapture1(clientCon, in_reg, out_rects, num_out_rects, id);
-        case 2:
-        case 4:
-            /* used for remotefx capture */
+        case 2: /* surface command RFX */
+            /* FALLTHROUGH */
+        case 4: /* GFX progressive */
             return rdpCapture2(clientCon, in_reg, out_rects, num_out_rects, id);
-        case 3:
-        case 5:
+        case 3: /* surface command h264 */
+            /* FALLTHROUGH */
+        case 5: /* GFX h264 */
             /* used for even align capture */
             return rdpCapture3(clientCon, in_reg, out_rects, num_out_rects, id);
         default:
