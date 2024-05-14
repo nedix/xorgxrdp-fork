@@ -2625,6 +2625,8 @@ rdpClientConSendPaintRectShmFd(rdpPtr dev, rdpClientCon *clientCon,
            id->flags, id->left, id->top, id->width, id->height));
 
     capture_code = clientCon->client_info.capture_code;
+    LLOGLN(10, ("rdpClientConSendPaintRectShmFd: capture_code %d",
+           capture_code));
 
     num_rects_d = REGION_NUM_RECTS(dirtyReg);
     num_rects_c = numCopyRects;
