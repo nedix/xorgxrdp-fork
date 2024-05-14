@@ -260,7 +260,7 @@ a8r8g8b8_to_nv12_709fr_box_x86_sse2_wrap(const uint8_t *s8, int src_stride,
         }
         if (left_over_width > 0)
         {
-            error = a8r8g8b8_to_nv12_709fr_box(s8 + awidaligned_widthth * 4,
+            error = a8r8g8b8_to_nv12_709fr_box(s8 + aligned_width * 4,
                                                src_stride,
                                                d8_y + aligned_width,
                                                dst_stride_y,
