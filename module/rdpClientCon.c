@@ -776,8 +776,8 @@ rdpClientConResizeAllMemoryAreas(rdpPtr dev, rdpClientCon *clientCon)
     clientCon->rdp_height = height;
 
     /* Set the capture parameters */
-    if ((clientCon->client_info.capture_code == 2) || /* RFX */
-        (clientCon->client_info.capture_code == 4))
+    if ((clientCon->client_info.capture_code == CC_SUF_RFX) || /* RFX */
+        (clientCon->client_info.capture_code == CC_GFX_PRO))
     {
         LLOGLN(0, ("rdpClientConProcessMsgClientInfo: got RFX capture"));
         /* RFX capture needs fixed-size rectangles */
@@ -793,8 +793,8 @@ rdpClientConResizeAllMemoryAreas(rdpPtr dev, rdpClientCon *clientCon)
         clientCon->cap_stride_bytes = clientCon->cap_width * 4;
         shmemstatus = SHM_RFX_ACTIVE_PENDING;
     }
-    else if ((clientCon->client_info.capture_code == 3) || /* H264 */
-             (clientCon->client_info.capture_code == 5))
+    else if ((clientCon->client_info.capture_code == CC_SUF_A2) || /* H264 */
+             (clientCon->client_info.capture_code == CC_GFX_A2))
     {
         LLOGLN(0, ("rdpClientConProcessMsgClientInfo: got H264 capture"));
         clientCon->cap_width = width;
@@ -1011,12 +1011,12 @@ rdpSendMemoryAllocationComplete(rdpPtr dev, rdpClientCon *clientCon)
 
     switch (clientCon->client_info.capture_code)
     {
-        case 2:
-        case 4:
+        case CC_SUF_RFX:
+        case CC_GFX_PRO:
             alignment = XRDP_RFX_ALIGN;
             break;
-        case 3:
-        case 5:
+        case CC_SUF_A2:
+        case CC_GFX_A2:
             alignment = XRDP_H264_ALIGN;
             break;
         default:
@@ -2608,7 +2608,7 @@ rdpClientConSendPaintRectShmFd(rdpPtr dev, rdpClientCon *clientCon,
     int num_rects_d;
     int num_rects_c;
     struct stream *s;
-    int capture_code;
+    enum xrdp_capture_code capture_code;
     int start_frame_bytes;
     int wiretosurface1_bytes;
     int wiretosurface2_bytes;
@@ -2638,7 +2638,7 @@ rdpClientConSendPaintRectShmFd(rdpPtr dev, rdpClientCon *clientCon,
 
     rdpClientConBeginUpdate(dev, clientCon);
 
-    if (capture_code < 4)
+    if (capture_code < CC_GFX_PRO)
     {
         /* non gfx */
         size = 2 + 2 + 2 + num_rects_d * 8 + 2 + num_rects_c * 8;
@@ -2658,7 +2658,7 @@ rdpClientConSendPaintRectShmFd(rdpPtr dev, rdpClientCon *clientCon,
         out_uint32_le(s, clientCon->rect_id);
         out_uint32_le(s, id->shmem_bytes);
         out_uint32_le(s, id->shmem_offset);
-		if (capture_code == 2) /* rfx */
+		if (capture_code == CC_SUF_RFX) /* rfx */
 		{
             out_uint16_le(s, id->left);
             out_uint16_le(s, id->top);
@@ -2675,7 +2675,7 @@ rdpClientConSendPaintRectShmFd(rdpPtr dev, rdpClientCon *clientCon,
         rdpClientConSendPending(clientCon->dev, clientCon);
         g_sck_send_fd_set(clientCon->sck, "int", 4, &(id->shmem_fd), 1);
     }
-    else if (capture_code == 4) /* gfx pro rfx */
+    else if (capture_code == CC_GFX_PRO) /* gfx pro rfx */
     {
         start_frame_bytes = 8 + 8;
         wiretosurface2_bytes = 8 + 13 +
@@ -2747,7 +2747,7 @@ rdpClientConSendPaintRectShmFd(rdpPtr dev, rdpClientCon *clientCon,
             out_uint32_le(s, 0);                /* shmem_bytes */
         }
     }
-    else if (capture_code == 5) /* gfx h264 */
+    else if (capture_code == CC_GFX_A2) /* gfx h264 */
     {
         start_frame_bytes = 8 + 8;
         wiretosurface1_bytes = 8 + 9 +
