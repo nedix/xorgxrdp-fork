@@ -50,7 +50,12 @@ Client connection to xrdp
 #include "rdpInput.h"
 #include "rdpReg.h"
 #include "rdpCapture.h"
+
+#if defined(XORGXRDP_LRANDR)
+#include "rdpLRandR.h"
+#else
 #include "rdpRandR.h"
+#endif
 
 #define LOG_LEVEL 1
 #define LLOGLN(_level, _args) \
@@ -872,10 +877,19 @@ rdpClientConResizeAllMemoryAreas(rdpPtr dev, rdpClientCon *clientCon)
         int mmwidth = PixelToMM(width, pScrn->xDpi);
         int mmheight = PixelToMM(height, pScrn->yDpi);
         int ok;
+#if defined(XORGXRDP_LRANDR)
+        /* even though we are not using the built in randr, we still need
+         * to call this so driver can setup */
+        ok = RRScreenSizeSet(dev->pScreen, width, height, mmwidth, mmheight);
+        LLOGLN(0, ("rdpClientConProcessScreenSizeMsg: RRScreenSizeSet ok=[%d]", ok));
+        ok = rdpLRRScreenSizeSet(dev, width, height, mmwidth, mmheight);
+        LLOGLN(0, ("rdpClientConProcessScreenSizeMsg: LRRScreenSizeSet ok=[%d]", ok));
+#else
         dev->allow_screen_resize = 1;
         ok = RRScreenSizeSet(dev->pScreen, width, height, mmwidth, mmheight);
         dev->allow_screen_resize = 0;
         LLOGLN(0, ("rdpClientConProcessScreenSizeMsg: RRScreenSizeSet ok=[%d]", ok));
+#endif
     }
 
     rdpCaptureResetState(clientCon);

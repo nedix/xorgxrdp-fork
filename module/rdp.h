@@ -316,6 +316,7 @@ struct _rdpRec
     int monitorCount;
     /* glamor */
     Bool glamor;
+    Bool nvidia;
     PixmapPtr screenSwPixmap;
     void *xvPutImage;
     /* dri */
