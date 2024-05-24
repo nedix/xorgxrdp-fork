@@ -727,6 +727,64 @@ rdpCopyBox_a8r8g8b8_to_nv12_709fr(rdpClientCon *clientCon,
 
 /******************************************************************************/
 static Bool
+rdpCopyBoxList(rdpClientCon *clientCon, PixmapPtr dstPixmap,
+               BoxPtr out_rects, int num_out_rects,
+               int mon_left, int mon_top)
+{
+    PixmapPtr hwPixmap;
+    BoxPtr pbox;
+    ScreenPtr pScreen;
+    GCPtr copyGC;
+    ChangeGCVal tmpval[1];
+    int count;
+    int index;
+    int left;
+    int top;
+    int width;
+    int height;
+    char pix1[16];
+    rdpPtr dev;
+
+    LLOGLN(10, ("rdpCopyBoxList:"));
+
+    dev = clientCon->dev;
+    pScreen = dev->pScreen;
+    hwPixmap = pScreen->GetScreenPixmap(pScreen);
+    copyGC = GetScratchGC(dev->depth, pScreen);
+    if (copyGC == NULL)
+    {
+        return FALSE;
+    }
+    tmpval[0].val = GXcopy;
+    ChangeGC(NullClient, copyGC, GCFunction, tmpval);
+    ValidateGC(&(hwPixmap->drawable), copyGC);
+    count = num_out_rects;
+    pbox = out_rects;
+    for (index = 0; index < count; index++)
+    {
+        left = pbox[index].x1;
+        top = pbox[index].y1;
+        width = pbox[index].x2 - pbox[index].x1;
+        height = pbox[index].y2 - pbox[index].y1;
+        if ((width > 0) && (height > 0))
+        {
+            copyGC->ops->CopyArea(&(hwPixmap->drawable),
+                                    &(dstPixmap->drawable),
+                                    copyGC, left, top,
+                                    width, height,
+                                    left - mon_left,
+                                    top - mon_top);
+        }
+    }
+    FreeScratchGC(copyGC);
+    pScreen->GetImage(&(dstPixmap->drawable), 0, 0, 1, 1, ZPixmap,
+                          0xffffffff, pix1);
+
+    return TRUE;
+}
+
+/******************************************************************************/
+static Bool
 isShmStatusActive(enum shared_memory_status status) {
     switch (status) {
         case SHM_ACTIVE:
@@ -798,6 +856,16 @@ rdpCaptureSimple(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
     {
         rect = psrc_rects[i];
         (*out_rects)[i] = rect;
+    }
+
+    if (clientCon->dev->glamor || clientCon->dev->nvidia)
+    {
+        /* copy vmem to smem */
+        if (!rdpCopyBoxList(clientCon, clientCon->dev->screenSwPixmap,
+                            *out_rects, *num_out_rects, id->left, id->top))
+        {
+            return FALSE;
+        }
     }
 
     src = id->pixels;
@@ -947,6 +1015,16 @@ rdpCaptureSufA16(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
         index++;
     }
 
+    if (clientCon->dev->glamor || clientCon->dev->nvidia)
+    {
+        /* copy vmem to smem */
+        if (!rdpCopyBoxList(clientCon, clientCon->dev->screenSwPixmap,
+                            *out_rects, *num_out_rects, id->left, id->top))
+        {
+            return FALSE;
+        }
+    }
+
     src = id->pixels;
     dst = id->shmem_pixels;
     dst_format = clientCon->rdp_format;
@@ -1029,6 +1107,17 @@ rdpCaptureGfxPro(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
         LLOGLN(0, ("rdpCaptureGfxPro: WARNING -- Shared memory is not configured"
                    " for RFX. Aborting capture!"));
         return FALSE;
+    }
+
+    if (clientCon->dev->glamor || clientCon->dev->nvidia)
+    {
+        /* copy vmem to smem */
+        if (!rdpCopyBoxList(clientCon, clientCon->dev->screenSwPixmap,
+                            REGION_RECTS(in_reg), REGION_NUM_RECTS(in_reg),
+                            id->left, id->top))
+        {
+            return FALSE;
+        }
     }
 
     *out_rects = g_new(BoxRec, RDP_MAX_TILES);
@@ -1164,6 +1253,7 @@ rdpCaptureSufA2(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
     int src_stride;
     int dst_stride;
     int dst_format;
+    int monitor_index;
 
     LLOGLN(10, ("rdpCaptureSufA2:"));
 
@@ -1201,6 +1291,24 @@ rdpCaptureSufA2(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
                rect.x2, rect.y2));
         (*out_rects)[index] = rect;
         index++;
+    }
+
+    monitor_index = (id->flags >> 28) & 0xF;
+    if (clientCon->helperPixmaps[monitor_index] != NULL)
+    {
+        /* copy vmem to vmem */
+        rv = rdpCopyBoxList(clientCon,
+                            clientCon->helperPixmaps[monitor_index],
+                            *out_rects, *num_out_rects, id->left, id->top);
+        id->flags |= 1;
+        return rv;
+        /* helper will do the rest */
+    }
+    else if (clientCon->dev->glamor || clientCon->dev->nvidia)
+    {
+        /* copy vmem to smem */
+        rv = rdpCopyBoxList(clientCon, clientCon->dev->screenSwPixmap,
+                            *out_rects, *num_out_rects, id->left, id->top);
     }
 
     src = id->pixels;
@@ -1252,6 +1360,7 @@ rdpCaptureGfxA2(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
     int src_stride;
     int dst_stride;
     int dst_format;
+    int monitor_index;
 
     LLOGLN(10, ("rdpCaptureGfxA2:"));
 
@@ -1301,20 +1410,37 @@ rdpCaptureGfxA2(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
         index++;
     }
 
+    monitor_index = (id->flags >> 28) & 0xF;
+    if (clientCon->helperPixmaps[monitor_index] != NULL)
+    {
+        /* copy vmem to vmem */
+        rv = rdpCopyBoxList(clientCon,
+                            clientCon->helperPixmaps[monitor_index],
+                            *out_rects, *num_out_rects, id->left, id->top);
+        id->flags |= 1;
+        return rv;
+        /* helper will do the rest */
+    }
+    else if (clientCon->dev->glamor || clientCon->dev->nvidia)
+    {
+        /* copy vmem to smem */
+        rv = rdpCopyBoxList(clientCon, clientCon->dev->screenSwPixmap,
+                            *out_rects, *num_out_rects, id->left, id->top);
+    }
+
     src = id->pixels;
     dst = id->shmem_pixels;
     dst_format = clientCon->rdp_format;
     src_stride = id->lineBytes;
     dst_stride = id->width;
 
-    src = src + src_stride * id->top + id->left * 4;
-
     if (dst_format == XRDP_nv12_709fr)
     {
         dst_uv = dst;
         dst_uv += id->width * id->height;
         rdpCopyBox_a8r8g8b8_to_nv12_709fr(clientCon,
-                                          src, src_stride, 0, 0,
+                                          src, src_stride,
+                                          -id->left, -id->top,
                                           dst, dst_stride,
                                           dst_uv, dst_stride,
                                           0, 0,
@@ -1328,65 +1454,6 @@ rdpCaptureGfxA2(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
     return rv;
 }
 
-#if defined(XORGXRDP_GLAMOR)
-/******************************************************************************/
-static int
-copy_vmem(rdpPtr dev, RegionPtr in_reg)
-{
-    PixmapPtr hwPixmap;
-    PixmapPtr swPixmap;
-    BoxPtr pbox;
-    ScreenPtr pScreen;
-    GCPtr copyGC;
-    ChangeGCVal tmpval[1];
-    int count;
-    int index;
-    int left;
-    int top;
-    int width;
-    int height;
-
-    /* copy the dirty area from the screen hw pixmap to a sw pixmap
-       this should do a dma */
-    pScreen = dev->pScreen;
-    hwPixmap = pScreen->GetScreenPixmap(pScreen);
-    swPixmap = dev->screenSwPixmap;
-    copyGC = GetScratchGC(dev->depth, pScreen);
-    if (copyGC != NULL)
-    {
-        tmpval[0].val = GXcopy;
-        ChangeGC(NullClient, copyGC, GCFunction, tmpval);
-        ValidateGC(&(hwPixmap->drawable), copyGC);
-        count = REGION_NUM_RECTS(in_reg);
-        pbox = REGION_RECTS(in_reg);
-        for (index = 0; index < count; index++)
-        {
-            left = pbox[index].x1;
-            top = pbox[index].y1;
-            width = pbox[index].x2 - pbox[index].x1;
-            height = pbox[index].y2 - pbox[index].y1;
-            if ((width > 0) && (height > 0))
-            {
-                LLOGLN(10, ("copy_vmem: hwPixmap tex 0x%8.8x "
-                       "swPixmap tex 0x%8.8x",
-                       glamor_get_pixmap_texture(hwPixmap),
-                       glamor_get_pixmap_texture(swPixmap)));
-                 copyGC->ops->CopyArea(&(hwPixmap->drawable),
-                                       &(swPixmap->drawable),
-                                       copyGC, left, top,
-                                       width, height, left, top);
-            }
-        }
-        FreeScratchGC(copyGC);
-    }
-    else
-    {
-        return 1;
-    }
-    return 0;
-}
-#endif
-
 /**
  * Copy an array of rectangles from one memory area to another
  *****************************************************************************/
@@ -1398,17 +1465,6 @@ rdpCapture(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
 
     LLOGLN(10, ("rdpCapture:"));
     mode = clientCon->client_info.capture_code;
-    if (clientCon->dev->glamor)
-    {
-#if defined(XORGXRDP_GLAMOR)
-        if ((mode == 2) || (mode == 4))
-        {
-            return rdpEglCaptureRfx(clientCon, in_reg, out_rects,
-                                    num_out_rects, id);
-        }
-        copy_vmem(clientCon->dev, in_reg);
-#endif
-    }
     switch (mode)
     {
         case CC_SIMPLE:
