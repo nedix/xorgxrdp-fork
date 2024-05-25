@@ -131,6 +131,8 @@ struct _rdpClientCon
     /* true = skip drawing */
     int suppress_output;
 
+    int helper_pid;
+
     struct _rdpClientCon *next;
     struct _rdpClientCon *prev;
 };
