@@ -88,7 +88,7 @@ rdpPutImage(DrawablePtr pDst, GCPtr pGC, int depth, int x, int y,
                 if (clientCon->conNumber == pBits32[1])
                 {
                     /* free old */
-                    pixmap = clientCon->helperPixmaps[pBits32[2] & 0xF];
+                    pixmap = clientCon->accelAssistPixmaps[pBits32[2] & 0xF];
                     if (pixmap != NULL)
                     {
                         pScreen->DestroyPixmap(pixmap);
@@ -97,7 +97,7 @@ rdpPutImage(DrawablePtr pDst, GCPtr pGC, int depth, int x, int y,
                     pixmap = (PixmapPtr) pDst;
                     LLOGLN(0, ("rdpPutImage: setting conNumber %d, monitor num %d "
                            "to pixmap %p", pBits32[1], pBits32[2], pixmap));
-                    clientCon->helperPixmaps[pBits32[2] & 0xF] = pixmap;
+                    clientCon->accelAssistPixmaps[pBits32[2] & 0xF] = pixmap;
                     /* so it can not get freed early */
                     pixmap->refcnt++;
                     break;

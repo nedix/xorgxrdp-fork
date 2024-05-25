@@ -115,7 +115,7 @@ struct _rdpClientCon
     int rect_id_ack;
     enum shared_memory_status shmemstatus;
 
-    PixmapPtr helperPixmaps[16];
+    PixmapPtr accelAssistPixmaps[16];
 
     OsTimerPtr updateTimer;
     CARD32 lastUpdateTime; /* millisecond timestamp */
@@ -131,7 +131,7 @@ struct _rdpClientCon
     /* true = skip drawing */
     int suppress_output;
 
-    int helper_pid;
+    int accel_assist_pid;
 
     struct _rdpClientCon *next;
     struct _rdpClientCon *prev;
