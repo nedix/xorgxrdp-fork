@@ -370,53 +370,53 @@ rdpDeferredIdleDisconnectCallback(OsTimerPtr timer, CARD32 now, pointer arg)
 
 /*****************************************************************************/
 static int
-rdpShutdownHelper(rdpPtr dev, rdpClientCon *clientCon) {
+rdpShutdownAccelAssist(rdpPtr dev, rdpClientCon *clientCon) {
     ScreenPtr pScreen;
     PixmapPtr pPixmap;
     int index;
 
-    LLOGLN(0, ("rdpShutdownHelper:"));
-    if (clientCon->helper_pid <= 0)
+    LLOGLN(0, ("rdpShutdownAccelAssist:"));
+    if (clientCon->accel_assist_pid <= 0)
     {
         return 0;
     }
     int exit_code;
-    if (waitpid(clientCon->helper_pid, &exit_code, WNOHANG) == 0)
+    if (waitpid(clientCon->accel_assist_pid, &exit_code, WNOHANG) == 0)
     {
         /* still running */
-        kill(clientCon->helper_pid, SIGTERM);
-        waitpid(clientCon->helper_pid, &exit_code, 0);
+        kill(clientCon->accel_assist_pid, SIGTERM);
+        waitpid(clientCon->accel_assist_pid, &exit_code, 0);
     }
     pScreen = clientCon->dev->pScreen;
     for (index = 0; index < 16; index++)
     {
-        pPixmap = clientCon->helperPixmaps[index];
+        pPixmap = clientCon->accelAssistPixmaps[index];
         if (pPixmap != NULL)
         {
             pScreen->DestroyPixmap(pPixmap);
         }
     }
-    clientCon->helper_pid = -1;
+    clientCon->accel_assist_pid = -1;
     return exit_code;
 }
 
 /******************************************************************************/
 static int
-rdpClientConUseHelper(rdpPtr dev, rdpClientCon *clientCon) {
-    const char *xrdp_use_helper = getenv("XRDP_USE_HELPER");
-    if (xrdp_use_helper == NULL)
+rdpClientConUseAccelAssist(rdpPtr dev, rdpClientCon *clientCon) {
+    const char *xrdp_use_accel_assist = getenv("XRDP_USE_ACCEL_ASSIST");
+    if (xrdp_use_accel_assist == NULL)
     {
         return 0;
     }
-    if (strcmp(xrdp_use_helper, "0") == 0)
+    if (strcmp(xrdp_use_accel_assist, "0") == 0)
     {
         return 0;
     }
-    if (strcmp(xrdp_use_helper, "1") == 0)
+    if (strcmp(xrdp_use_accel_assist, "1") == 0)
     {
         return ((dev->nvidia || dev->glamor) &&
-                ((clientCon->client_info.capture_code == 3) ||
-                 (clientCon->client_info.capture_code == 5)));
+                ((clientCon->client_info.capture_code == CC_SUF_A2) ||
+                 (clientCon->client_info.capture_code == CC_GFX_A2)));
     }
     return 0;
 }
@@ -484,8 +484,8 @@ rdpClientConDisconnect(rdpPtr dev, rdpClientCon *clientCon)
                         clientCon->shmemfd,
                         clientCon->shmem_bytes);
     }
-    if (rdpClientConUseHelper(dev, clientCon)) {
-        rdpShutdownHelper(dev, clientCon);
+    if (rdpClientConUseAccelAssist(dev, clientCon)) {
+        rdpShutdownAccelAssist(dev, clientCon);
     }
     free(clientCon);
     return 0;
@@ -1073,27 +1073,28 @@ rdpClientConProcessMsgClientInput(rdpPtr dev, rdpClientCon *clientCon)
 
 /******************************************************************************/
 static int
-rdpStartHelper(rdpPtr dev, rdpClientCon *clientCon)
+rdpStartAccelAssist(rdpPtr dev, rdpClientCon *clientCon)
 {
     char text[64];
     int spair[2];
     int index;
 
-    // The helper is already running, don't attempt to initialize it again.
-    if (clientCon->helper_pid > 0) {
+    // Accel assist is already running, don't attempt to initialize it again.
+    if (clientCon->accel_assist_pid > 0)
+    {
         return 0;
     }
 
     socketpair(AF_UNIX, SOCK_STREAM, 0, spair);
 
-    clientCon->helper_pid = fork();
-    if (clientCon->helper_pid == -1)
+    clientCon->accel_assist_pid = fork();
+    if (clientCon->accel_assist_pid == -1)
     {
         /* error */
         close(spair[0]);
         close(spair[1]);
     }
-        else if (clientCon->helper_pid == 0)
+    else if (clientCon->accel_assist_pid == 0)
     {
         /* child */
         for (index = 0; index < 256; index++)
@@ -1123,8 +1124,8 @@ rdpStartHelper(rdpPtr dev, rdpClientCon *clientCon)
     else
     {
         /* parent */
-        LLOGLN(0, ("rdpClientConProcessMsgClientInfo: started helper pid %d",
-               clientCon->helper_pid));
+        LLOGLN(0, ("rdpClientConProcessMsgClientInfo: started accel assist pid %d",
+               clientCon->accel_assist_pid));
         rdpClientConRemoveEnabledDevice(clientCon->sck);
         close(clientCon->sck);
         close(spair[0]);
@@ -1137,7 +1138,7 @@ rdpStartHelper(rdpPtr dev, rdpClientCon *clientCon)
 
 /******************************************************************************/
 static int
-rdpSendHelperMonitors(rdpPtr dev, rdpClientCon *clientCon)
+rdpSendAccelAssistMonitors(rdpPtr dev, rdpClientCon *clientCon)
 {
     int index;
     int len;
@@ -1235,7 +1236,7 @@ rdpSendMemoryAllocationComplete(rdpPtr dev, rdpClientCon *clientCon)
     s_mark_end(clientCon->out_s);
     len = (int) (clientCon->out_s->end - clientCon->out_s->data);
     s_pop_layer(clientCon->out_s, iso_hdr);
-    out_uint16_le(clientCon->out_s, 100); /* Metadata message to xrdp (or if using helper, helper signal) */
+    out_uint16_le(clientCon->out_s, 100); /* Metadata message to xrdp (or if using accel assist, signal) */
     out_uint16_le(clientCon->out_s, clientCon->count);
     out_uint32_le(clientCon->out_s, len - layer_size);
     rv = rdpClientConSend(dev, clientCon, clientCon->out_s->data, len);
@@ -1294,9 +1295,12 @@ rdpClientConProcessClientInfoMonitors(rdpPtr dev, rdpClientCon *clientCon)
         dev->doMultimon = 0;
         dev->monitorCount = 0;
     }
-
+#if defined(XORGXRDP_LRANDR)
+    rdpLRRSetRdpOutputs(dev);
+#else
     rdpRRSetRdpOutputs(dev);
     RRTellChanged(dev->pScreen);
+#endif
 }
 
 /******************************************************************************/
@@ -1413,10 +1417,10 @@ rdpClientConProcessMsgClientInfo(rdpPtr dev, rdpClientCon *clientCon)
                           0, 0, 0);
 
     /* currently only nvenc and h264 is supported */
-    if (rdpClientConUseHelper(dev, clientCon))
+    if (rdpClientConUseAccelAssist(dev, clientCon))
     {
-        rdpStartHelper(dev, clientCon);
-        rdpSendHelperMonitors(dev, clientCon);
+        rdpStartAccelAssist(dev, clientCon);
+        rdpSendAccelAssistMonitors(dev, clientCon);
     }
     else
     {

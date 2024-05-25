@@ -1294,15 +1294,15 @@ rdpCaptureSufA2(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
     }
 
     monitor_index = (id->flags >> 28) & 0xF;
-    if (clientCon->helperPixmaps[monitor_index] != NULL)
+    if (clientCon->accelAssistPixmaps[monitor_index] != NULL)
     {
         /* copy vmem to vmem */
         rv = rdpCopyBoxList(clientCon,
-                            clientCon->helperPixmaps[monitor_index],
+                            clientCon->accelAssistPixmaps[monitor_index],
                             *out_rects, *num_out_rects, id->left, id->top);
         id->flags |= 1;
         return rv;
-        /* helper will do the rest */
+        /* accel assist will do the rest */
     }
     else if (clientCon->dev->glamor || clientCon->dev->nvidia)
     {
@@ -1411,15 +1411,15 @@ rdpCaptureGfxA2(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
     }
 
     monitor_index = (id->flags >> 28) & 0xF;
-    if (clientCon->helperPixmaps[monitor_index] != NULL)
+    if (clientCon->accelAssistPixmaps[monitor_index] != NULL)
     {
         /* copy vmem to vmem */
         rv = rdpCopyBoxList(clientCon,
-                            clientCon->helperPixmaps[monitor_index],
+                            clientCon->accelAssistPixmaps[monitor_index],
                             *out_rects, *num_out_rects, id->left, id->top);
         id->flags |= 1;
         return rv;
-        /* helper will do the rest */
+        /* accel assist will do the rest */
     }
     else if (clientCon->dev->glamor || clientCon->dev->nvidia)
     {
