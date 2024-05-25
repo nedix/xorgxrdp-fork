@@ -18,6 +18,7 @@
 #include "rdpDraw.h"
 #include "rdpMisc.h"
 #include "rdpReg.h"
+#include "rdpLRandR.h"
 
 #if defined(XORGXRDP_GLAMOR)
 #include <glamor.h>
@@ -1101,6 +1102,7 @@ rdpLRRInit(rdpPtr dev)
     //g_procLRandrVector[29] = ProcLRRSetPanning; TODO
     //g_procLRandrVector[30] = ProcLRRSetOutputPrimary; ok
     g_procLRandrVector[31] = ProcLRRGetOutputPrimary;
+    rdpLRRSetRdpOutputs(dev);
     return 0;
 }
 

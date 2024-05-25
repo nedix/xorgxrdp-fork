@@ -73,6 +73,7 @@ rdp module main
 #include "rdpSimd.h"
 #include "rdpReg.h"
 #ifdef XORGXRDP_LRANDR
+#include "rdpRandR.h"
 #include "rdpLRandR.h"
 #else
 #include "rdpRandR.h"
@@ -107,7 +108,7 @@ xorgxrdpPreInit(ScrnInfoPtr pScrn, int flags)
     {
         pScrn->reservedPtr[0] = xnfcalloc(sizeof(rdpRec), 1);
 #if defined(RANDR) && defined(XORGXRDP_LRANDR)
-        noRRExtension = TRUE; /* do not use build in randr */
+        noRRExtension = TRUE; /* do not use built in randr */
 #endif
     }
     return rv;

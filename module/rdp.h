@@ -327,7 +327,7 @@ struct _rdpRec
 };
 typedef struct _rdpRec rdpRec;
 typedef struct _rdpRec * rdpPtr;
-#define XRDPPTR(_p) ((rdpPtr)((_p)->driverPrivate))
+#define XRDPPTR(_p) ((rdpPtr)((_p)->reservedPtr[0]))
 
 struct _rdpGCRec
 {
