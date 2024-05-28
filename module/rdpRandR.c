@@ -161,7 +161,7 @@ rdpRRScreenSetSize(ScreenPtr pScreen, CARD16 width, CARD16 height,
         dev->paddedWidthInBytes = dev->screenSwPixmap->devKind;
         dev->sizeInBytes = dev->paddedWidthInBytes * dev->height;
     }
-    else if (dev->glamor)
+    else
     {
         dev->paddedWidthInBytes = PixmapBytePad(dev->width, dev->depth);
         dev->sizeInBytes = dev->paddedWidthInBytes * dev->height;
@@ -173,6 +173,9 @@ rdpRRScreenSetSize(ScreenPtr pScreen, CARD16 width, CARD16 height,
                                     -1, -1,
                                     dev->paddedWidthInBytes,
                                     dev->pfbMemory);
+    }
+    if (dev->glamor)
+    {
 #if defined(XORGXRDP_GLAMOR)
         PixmapPtr old_screen_pixmap;
         uint32_t screen_tex;
