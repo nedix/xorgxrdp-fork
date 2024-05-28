@@ -1106,69 +1106,6 @@ rdpLRRInit(rdpPtr dev)
     return 0;
 }
 
-#if defined(XORGXRDP_GLAMOR)
-/*****************************************************************************/
-static int
-rdpLRRSetPixmapVisitWindow(WindowPtr window, void *data)
-{
-    ScreenPtr screen;
-
-    LLOGLN(10, ("rdpLRRSetPixmapVisitWindow:"));
-    screen = window->drawable.pScreen;
-    if (screen->GetWindowPixmap(window) == data)
-    {
-        screen->SetWindowPixmap(window, screen->GetScreenPixmap(screen));
-        return WT_WALKCHILDREN;
-    }
-    return WT_DONTWALKCHILDREN;
-}
-#endif
-
-#if 0
-/*
- * Edit connection information block so that new clients
- * see the current screen size on connect
- */
-/* from rrscreen.c */
-static void
-LRREditConnectionInfo(ScreenPtr pScreen)
-{
-    xConnSetup *connSetup;
-    char *vendor;
-    xPixmapFormat *formats;
-    xWindowRoot *root;
-    xDepth *depth;
-    xVisualType *visual;
-    int screen = 0;
-    int d;
-
-    if (ConnectionInfo == NULL)
-        return;
-
-    connSetup = (xConnSetup *) ConnectionInfo;
-    vendor = (char *) connSetup + sizeof(xConnSetup);
-    formats = (xPixmapFormat *) ((char *) vendor +
-                                 pad_to_int32(connSetup->nbytesVendor));
-    root = (xWindowRoot *) ((char *) formats +
-                            sizeof(xPixmapFormat) *
-                            screenInfo.numPixmapFormats);
-    while (screen != pScreen->myNum) {
-        depth = (xDepth *) ((char *) root + sizeof(xWindowRoot));
-        for (d = 0; d < root->nDepths; d++) {
-            visual = (xVisualType *) ((char *) depth + sizeof(xDepth));
-            depth = (xDepth *) ((char *) visual +
-                                depth->nVisuals * sizeof(xVisualType));
-        }
-        root = (xWindowRoot *) ((char *) depth);
-        screen++;
-    }
-    root->pixWidth = pScreen->width;
-    root->pixHeight = pScreen->height;
-    root->mmWidth = pScreen->mmWidth;
-    root->mmHeight = pScreen->mmHeight;
-}
-#endif
-
 /******************************************************************************/
 static void
 LRRSendConfigNotify(ScreenPtr pScreen)
