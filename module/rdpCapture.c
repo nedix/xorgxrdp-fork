@@ -729,7 +729,8 @@ rdpCopyBox_a8r8g8b8_to_nv12_709fr(rdpClientCon *clientCon,
 static Bool
 rdpCopyBoxList(rdpClientCon *clientCon, PixmapPtr dstPixmap,
                BoxPtr out_rects, int num_out_rects,
-               int mon_left, int mon_top)
+               int srcx, int srcy,
+               int dstx, int dsty)
 {
     PixmapPtr hwPixmap;
     BoxPtr pbox;
@@ -769,11 +770,10 @@ rdpCopyBoxList(rdpClientCon *clientCon, PixmapPtr dstPixmap,
         if ((width > 0) && (height > 0))
         {
             copyGC->ops->CopyArea(&(hwPixmap->drawable),
-                                    &(dstPixmap->drawable),
-                                    copyGC, left, top,
+                                    &(dstPixmap->drawable), copyGC,
+                                    left - srcx, top - srcy,
                                     width, height,
-                                    left - mon_left,
-                                    top - mon_top);
+                                    left - dstx, top - dsty);
         }
     }
     FreeScratchGC(copyGC);
@@ -862,7 +862,8 @@ rdpCaptureSimple(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
     {
         /* copy vmem to smem */
         if (!rdpCopyBoxList(clientCon, clientCon->dev->screenSwPixmap,
-                            *out_rects, *num_out_rects, id->left, id->top))
+                            *out_rects, *num_out_rects,
+                            0, 0, 0, 0))
         {
             return FALSE;
         }
@@ -1019,7 +1020,8 @@ rdpCaptureSufA16(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
     {
         /* copy vmem to smem */
         if (!rdpCopyBoxList(clientCon, clientCon->dev->screenSwPixmap,
-                            *out_rects, *num_out_rects, id->left, id->top))
+                            *out_rects, *num_out_rects,
+                            0, 0, 0, 0))
         {
             return FALSE;
         }
@@ -1114,7 +1116,7 @@ rdpCaptureGfxPro(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
         /* copy vmem to smem */
         if (!rdpCopyBoxList(clientCon, clientCon->dev->screenSwPixmap,
                             REGION_RECTS(in_reg), REGION_NUM_RECTS(in_reg),
-                            id->left, id->top))
+                            0, 0, 0, 0))
         {
             return FALSE;
         }
@@ -1274,6 +1276,26 @@ rdpCaptureSufA2(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
         return FALSE;
     }
 
+    monitor_index = (id->flags >> 28) & 0xF;
+    if (clientCon->accelAssistPixmaps[monitor_index] != NULL)
+    {
+        /* copy vmem to vmem */
+        rv = rdpCopyBoxList(clientCon,
+                            clientCon->accelAssistPixmaps[monitor_index],
+                            *out_rects, *num_out_rects,
+                            0, 0, id->left, id->top);
+        id->flags |= 1;
+        return rv;
+        /* accel assist will do the rest */
+    }
+    else if (clientCon->dev->glamor || clientCon->dev->nvidia)
+    {
+        /* copy vmem to smem */
+        rv = rdpCopyBoxList(clientCon, clientCon->dev->screenSwPixmap,
+                            *out_rects, *num_out_rects,
+                            0, 0, id->left, id->top);
+    }
+
     *num_out_rects = num_rects;
 
     *out_rects = g_new(BoxRec, num_rects * 4);
@@ -1291,24 +1313,6 @@ rdpCaptureSufA2(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
                rect.x2, rect.y2));
         (*out_rects)[index] = rect;
         index++;
-    }
-
-    monitor_index = (id->flags >> 28) & 0xF;
-    if (clientCon->accelAssistPixmaps[monitor_index] != NULL)
-    {
-        /* copy vmem to vmem */
-        rv = rdpCopyBoxList(clientCon,
-                            clientCon->accelAssistPixmaps[monitor_index],
-                            *out_rects, *num_out_rects, id->left, id->top);
-        id->flags |= 1;
-        return rv;
-        /* accel assist will do the rest */
-    }
-    else if (clientCon->dev->glamor || clientCon->dev->nvidia)
-    {
-        /* copy vmem to smem */
-        rv = rdpCopyBoxList(clientCon, clientCon->dev->screenSwPixmap,
-                            *out_rects, *num_out_rects, id->left, id->top);
     }
 
     src = id->pixels;
@@ -1371,8 +1375,6 @@ rdpCaptureGfxA2(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
         return FALSE;
     }
 
-    rv = TRUE;
-
     rdpRegionTranslate(in_reg, -id->left, -id->top);
 
     num_rects = REGION_NUM_RECTS(in_reg);
@@ -1409,23 +1411,33 @@ rdpCaptureGfxA2(rdpClientCon *clientCon, RegionPtr in_reg, BoxPtr *out_rects,
         (*out_rects)[index] = rect;
         index++;
     }
-
+    rv = TRUE;
     monitor_index = (id->flags >> 28) & 0xF;
     if (clientCon->accelAssistPixmaps[monitor_index] != NULL)
     {
+        LLOGLN(10, ("rdpCaptureGfxA2: a monitor_index %d left %d top %d",
+               monitor_index, id->left, id->top));
         /* copy vmem to vmem */
         rv = rdpCopyBoxList(clientCon,
                             clientCon->accelAssistPixmaps[monitor_index],
-                            *out_rects, *num_out_rects, id->left, id->top);
+                            *out_rects, num_rects,
+                            -id->left, -id->top, 0, 0);
         id->flags |= 1;
         return rv;
         /* accel assist will do the rest */
     }
     else if (clientCon->dev->glamor || clientCon->dev->nvidia)
     {
+        LLOGLN(10, ("rdpCaptureGfxA2: b monitor_index %d left %d top %d",
+               monitor_index, id->left, id->top));
         /* copy vmem to smem */
-        rv = rdpCopyBoxList(clientCon, clientCon->dev->screenSwPixmap,
-                            *out_rects, *num_out_rects, id->left, id->top);
+        if (!rdpCopyBoxList(clientCon,
+                            clientCon->dev->screenSwPixmap,
+                            *out_rects, num_rects,
+                            -id->left, -id->top, -id->left, -id->top))
+        {
+            return FALSE;
+        }
     }
 
     src = id->pixels;
