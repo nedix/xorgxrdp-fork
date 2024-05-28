@@ -269,14 +269,14 @@ rdpClientConGotConnection(ScreenPtr pScreen, rdpPtr dev)
     /* set idle timer to disconnect */
     if (dev->idle_disconnect_timeout_s > 0)
     {
-        LLOGLN(0, ("rdpClientConGetConnection: "
+        LLOGLN(0, ("rdpClientConGotConnection: "
                    "engaging idle timer, timeout [%d] sec", dev->idle_disconnect_timeout_s));
         dev->idleDisconnectTimer = TimerSet(dev->idleDisconnectTimer, 0, dev->idle_disconnect_timeout_s * 1000,
                                             rdpDeferredIdleDisconnectCallback, dev);
     }
     else
     {
-        LLOGLN(0, ("rdpClientConGetConnection: "
+        LLOGLN(0, ("rdpClientConGotConnection: "
                    "idle_disconnect_timeout set to non-positive value, idle timer turned off"));
     }
 
@@ -374,13 +374,13 @@ rdpShutdownAccelAssist(rdpPtr dev, rdpClientCon *clientCon) {
     ScreenPtr pScreen;
     PixmapPtr pPixmap;
     int index;
+    int exit_code = 0;
 
     LLOGLN(0, ("rdpShutdownAccelAssist:"));
     if (clientCon->accel_assist_pid <= 0)
     {
         return 0;
     }
-    int exit_code;
     if (waitpid(clientCon->accel_assist_pid, &exit_code, WNOHANG) == 0)
     {
         /* still running */
@@ -401,16 +401,18 @@ rdpShutdownAccelAssist(rdpPtr dev, rdpClientCon *clientCon) {
 }
 
 /******************************************************************************/
-static int
-rdpClientConUseAccelAssist(rdpPtr dev, rdpClientCon *clientCon) {
+static Bool
+rdpClientConUseAccelAssist(rdpPtr dev, rdpClientCon *clientCon)
+{
     const char *xrdp_use_accel_assist = getenv("XRDP_USE_ACCEL_ASSIST");
+
     if (xrdp_use_accel_assist == NULL)
     {
-        return 0;
+        return FALSE;
     }
     if (strcmp(xrdp_use_accel_assist, "0") == 0)
     {
-        return 0;
+        return FALSE;
     }
     if (strcmp(xrdp_use_accel_assist, "1") == 0)
     {
@@ -484,7 +486,8 @@ rdpClientConDisconnect(rdpPtr dev, rdpClientCon *clientCon)
                         clientCon->shmemfd,
                         clientCon->shmem_bytes);
     }
-    if (rdpClientConUseAccelAssist(dev, clientCon)) {
+    if (rdpClientConUseAccelAssist(dev, clientCon))
+    {
         rdpShutdownAccelAssist(dev, clientCon);
     }
     free(clientCon);
@@ -801,8 +804,10 @@ rdpClientConAllocateSharedMemory(rdpClientCon *clientCon, int bytes)
 
 /******************************************************************************/
 static enum shared_memory_status
-convertSharedMemoryStatusToActive(enum shared_memory_status status) {
-    switch (status) {
+convertSharedMemoryStatusToActive(enum shared_memory_status status)
+{
+    switch (status)
+    {
         case SHM_ACTIVE_PENDING:
             return SHM_ACTIVE;
         case SHM_RFX_ACTIVE_PENDING:
@@ -846,7 +851,7 @@ rdpClientConResizeAllMemoryAreas(rdpPtr dev, rdpClientCon *clientCon)
     if ((clientCon->client_info.capture_code == CC_SUF_RFX) || /* RFX */
         (clientCon->client_info.capture_code == CC_GFX_PRO))
     {
-        LLOGLN(0, ("rdpClientConProcessMsgClientInfo: got RFX capture"));
+        LLOGLN(0, ("rdpClientConResizeAllMemoryAreas: got RFX capture"));
         /* RFX capture needs fixed-size rectangles */
         clientCon->cap_width = RDPALIGN(width, XRDP_RFX_ALIGN);
         clientCon->cap_height = RDPALIGN(height, XRDP_RFX_ALIGN);
@@ -863,7 +868,7 @@ rdpClientConResizeAllMemoryAreas(rdpPtr dev, rdpClientCon *clientCon)
     else if ((clientCon->client_info.capture_code == CC_SUF_A2) || /* H264 */
              (clientCon->client_info.capture_code == CC_GFX_A2))
     {
-        LLOGLN(0, ("rdpClientConProcessMsgClientInfo: got H264 capture"));
+        LLOGLN(0, ("rdpClientConResizeAllMemoryAreas: got H264 capture"));
         clientCon->cap_width = width;
         clientCon->cap_height = height;
 
@@ -939,19 +944,10 @@ rdpClientConResizeAllMemoryAreas(rdpPtr dev, rdpClientCon *clientCon)
         int mmwidth = PixelToMM(width, pScrn->xDpi);
         int mmheight = PixelToMM(height, pScrn->yDpi);
         int ok;
-#if defined(XORGXRDP_LRANDR)
-        /* even though we are not using the built in randr, we still need
-         * to call this so driver can setup */
-        ok = RRScreenSizeSet(dev->pScreen, width, height, mmwidth, mmheight);
-        LLOGLN(0, ("rdpClientConProcessScreenSizeMsg: RRScreenSizeSet ok=[%d]", ok));
-        ok = rdpLRRScreenSizeSet(dev, width, height, mmwidth, mmheight);
-        LLOGLN(0, ("rdpClientConProcessScreenSizeMsg: LRRScreenSizeSet ok=[%d]", ok));
-#else
         dev->allow_screen_resize = 1;
         ok = RRScreenSizeSet(dev->pScreen, width, height, mmwidth, mmheight);
         dev->allow_screen_resize = 0;
-        LLOGLN(0, ("rdpClientConProcessScreenSizeMsg: RRScreenSizeSet ok=[%d]", ok));
-#endif
+        LLOGLN(0, ("rdpClientConResizeAllMemoryAreas: RRScreenSizeSet ok=[%d]", ok));
     }
 
     rdpCaptureResetState(clientCon);
@@ -1124,7 +1120,7 @@ rdpStartAccelAssist(rdpPtr dev, rdpClientCon *clientCon)
     else
     {
         /* parent */
-        LLOGLN(0, ("rdpClientConProcessMsgClientInfo: started accel assist pid %d",
+        LLOGLN(0, ("rdpStartAccelAssist: started accel assist pid %d",
                clientCon->accel_assist_pid));
         rdpClientConRemoveEnabledDevice(clientCon->sck);
         close(clientCon->sck);
@@ -1147,6 +1143,8 @@ rdpSendAccelAssistMonitors(rdpPtr dev, rdpClientCon *clientCon)
     int height;
     const int layer_size = 8;
 
+    LLOGLN(0, ("rdpSendAccelAssistMonitors: monitorCount %d",
+           dev->monitorCount));
     rdpClientConSendPending(dev, clientCon);
     init_stream(clientCon->out_s, 0);
     s_push_layer(clientCon->out_s, iso_hdr, layer_size);
