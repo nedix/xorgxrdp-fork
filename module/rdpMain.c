@@ -201,6 +201,11 @@ xorgxrdpRRScreenSetSize(ScreenPtr pScreen, CARD16 width, CARD16 height,
     dev->pfbMemory = dev->screenSwPixmap->devPrivate.ptr;
     dev->paddedWidthInBytes = dev->screenSwPixmap->devKind;
     dev->sizeInBytes = dev->paddedWidthInBytes * dev->height;
+
+    LLOGLN(0, ("xorgxrdpRRScreenSetSize: screenInfo x %d y %d "
+           "width %d height %d", screenInfo.x, screenInfo.y,
+           screenInfo.width, screenInfo.height));
+
     return rv;
 }
 

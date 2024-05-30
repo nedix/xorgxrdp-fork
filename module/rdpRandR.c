@@ -150,30 +150,16 @@ rdpRRScreenSetSize(ScreenPtr pScreen, CARD16 width, CARD16 height,
     pScreen->height = height;
     pScreen->mmWidth = mmWidth;
     pScreen->mmHeight = mmHeight;
-    if (dev->nvidia)
-    {
-        pScreen->DestroyPixmap(dev->screenSwPixmap);
-        dev->screenSwPixmap = pScreen->CreatePixmap(pScreen,
-                                                    dev->width, dev->height,
-                                                    dev->depth,
-                                                    CREATE_PIXMAP_USAGE_SHARED);
-        dev->pfbMemory = dev->screenSwPixmap->devPrivate.ptr;
-        dev->paddedWidthInBytes = dev->screenSwPixmap->devKind;
-        dev->sizeInBytes = dev->paddedWidthInBytes * dev->height;
-    }
-    else
-    {
-        dev->paddedWidthInBytes = PixmapBytePad(dev->width, dev->depth);
-        dev->sizeInBytes = dev->paddedWidthInBytes * dev->height;
-        screenPixmap = dev->screenSwPixmap;
-        free(dev->pfbMemory_alloc);
-        dev->pfbMemory_alloc = g_new0(uint8_t, dev->sizeInBytes + 16);
-        dev->pfbMemory = (uint8_t *) RDPALIGN(dev->pfbMemory_alloc, 16);
-        pScreen->ModifyPixmapHeader(screenPixmap, width, height,
-                                    -1, -1,
-                                    dev->paddedWidthInBytes,
-                                    dev->pfbMemory);
-    }
+    dev->paddedWidthInBytes = PixmapBytePad(dev->width, dev->depth);
+    dev->sizeInBytes = dev->paddedWidthInBytes * dev->height;
+    screenPixmap = dev->screenSwPixmap;
+    free(dev->pfbMemory_alloc);
+    dev->pfbMemory_alloc = g_new0(uint8_t, dev->sizeInBytes + 16);
+    dev->pfbMemory = (uint8_t *) RDPALIGN(dev->pfbMemory_alloc, 16);
+    pScreen->ModifyPixmapHeader(screenPixmap, width, height,
+                                -1, -1,
+                                dev->paddedWidthInBytes,
+                                dev->pfbMemory);
     if (dev->glamor)
     {
 #if defined(XORGXRDP_GLAMOR)
@@ -220,6 +206,11 @@ rdpRRScreenSetSize(ScreenPtr pScreen, CARD16 width, CARD16 height,
     xf86EnableDisableFBAccess(xf86Screens[pScreen->myNum], FALSE);
     xf86EnableDisableFBAccess(xf86Screens[pScreen->myNum], TRUE);
 #endif
+
+    LLOGLN(0, ("rdpRRScreenSetSize: screenInfo x %d y %d "
+           "width %d height %d", screenInfo.x, screenInfo.y,
+           screenInfo.width, screenInfo.height));
+
     return TRUE;
 }
 
