@@ -1297,7 +1297,15 @@ rdpClientConProcessClientInfoMonitors(rdpPtr dev, rdpClientCon *clientCon)
         dev->monitorCount = 0;
     }
 #if defined(XORGXRDP_LRANDR)
-    rdpLRRSetRdpOutputs(dev);
+    if (dev->nvidia)
+    {
+        rdpLRRSetRdpOutputs(dev);
+    }
+    else
+    {
+        rdpRRSetRdpOutputs(dev);
+        RRTellChanged(dev->pScreen);
+    }
 #else
     rdpRRSetRdpOutputs(dev);
     RRTellChanged(dev->pScreen);
