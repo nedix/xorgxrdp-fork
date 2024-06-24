@@ -130,14 +130,24 @@ typedef struct _rdpPointer rdpPointer;
 
 struct _rdpKeyboard
 {
-    int pause_spe;
-    int ctrl_down;
-    int alt_down;
-    int shift_down;
+    /**
+     * State of tab key
+     *
+     * Used to remove mstsc.exe tab KeyRelease before and after TS_SYNC_EVENT
+     */
     int tab_down;
-    /* this is toggled every time num lock key is released, not like the
-       above *_down vars */
-    int scroll_lock_down;
+
+    /**
+     * Whether or not to skip the next numlock key press/release
+     */
+    int skip_numlock;
+
+    int x11_keycode_caps_lock; ///< Used in TS_SYNC_EVENT processing
+    int x11_keycode_num_lock; ///< Used in TS_SYNC_EVENT processing
+    int x11_keycode_scroll_lock; ///< Used in TS_SYNC_EVENT processing
+
+    int scroll_lock_down; ///< Whether key is up/down
+    int scroll_lock_state; ///< Toggle state
     DeviceIntPtr device;
 };
 typedef struct _rdpKeyboard rdpKeyboard;
