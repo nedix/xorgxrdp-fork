@@ -1276,6 +1276,11 @@ rdpClientConProcessMsgClientRegionEx(rdpPtr dev, rdpClientCon *clientCon)
 
     in_uint32_le(s, flags);
     in_uint32_le(s, clientCon->rect_id_ack);
+    if (clientCon->rect_id_ack == INT_MAX)
+    {
+        // Client just wishes to ack all in-flight frames
+        clientCon->rect_id_ack = clientCon->rect_id;
+    }
     LLOGLN(10, ("rdpClientConProcessMsgClientRegionEx: flags 0x%8.8x", flags));
     LLOGLN(10, ("rdpClientConProcessMsgClientRegionEx: rect_id %d "
            "rect_id_ack %d", clientCon->rect_id, clientCon->rect_id_ack));
@@ -2819,27 +2824,36 @@ rdpClientConSendPaintRectShmFd(rdpPtr dev, rdpClientCon *clientCon,
 
 /******************************************************************************/
 /* this is called to capture a rect from the screen, if in a multi monitor
-   session, this will get called for each monitor, if no monitor info
-   from the client, the rect will be a band of less than MAX_CAPTURE_PIXELS
-   pixels
+   session, this will get called for each monitor
    after the capture, it sends the info to xrdp
    returns error */
 static int
-rdpCapRect(rdpClientCon *clientCon, BoxPtr cap_rect, struct image_data *id)
+rdpCapRect(rdpClientCon *clientCon, BoxPtr cap_rect, int mon,
+           struct image_data *id)
 {
     RegionPtr cap_dirty;
     RegionPtr cap_dirty_save;
     BoxPtr rects;
+    BoxRec rect;
     int num_rects;
 
     cap_dirty = rdpRegionCreate(cap_rect, 0);
     LLOGLN(10, ("rdpCapRect: cap_rect x1 %d y1 %d x2 %d y2 %d",
                cap_rect->x1, cap_rect->y1, cap_rect->x2, cap_rect->y2));
     rdpRegionIntersect(cap_dirty, cap_dirty, clientCon->dirtyRegion);
+    num_rects = REGION_NUM_RECTS(cap_dirty);
+    if (num_rects > MAX_CAPTURE_RECTS)
+    {
+        /* the dirty region is too complex, just get a rect that
+           covers the whole region */
+        rect = *rdpRegionExtents(cap_dirty);
+        rdpRegionDestroy(cap_dirty);
+        cap_dirty = rdpRegionCreate(&rect, 0);
+        num_rects = REGION_NUM_RECTS(cap_dirty);
+    }
     /* make a copy of cap_dirty because it may get altered */
     cap_dirty_save = rdpRegionCreate(NullBox, 0);
     rdpRegionCopy(cap_dirty_save, cap_dirty);
-    num_rects = REGION_NUM_RECTS(cap_dirty);
     if (num_rects > 0)
     {
         rects = 0;
@@ -2849,8 +2863,9 @@ rdpCapRect(rdpClientCon *clientCon, BoxPtr cap_rect, struct image_data *id)
         if (rdpCapture(clientCon, cap_dirty, &rects, &num_rects, id))
         {
             LLOGLN(10, ("rdpCapRect: num_rects %d", num_rects));
-            if (clientCon->rect_id_ack == INT_MAX)
+            if (clientCon->send_key_frame[mon])
             {
+                clientCon->send_key_frame[mon] = 0;
                 id->flags = (enum xrdp_encoder_flags)
                             ((int)id->flags | KEY_FRAME_REQUESTED);
             }
@@ -2879,14 +2894,7 @@ rdpDeferredUpdateCallback(OsTimerPtr timer, CARD32 now, pointer arg)
     int index;
     int monitor_index;
     int monitor_count;
-    int band_index;
-    int band_count;
-    int band_height;
     BoxRec cap_rect;
-    BoxRec dirty_extents;
-    int de_width;
-    int de_height;
-    int entry_rect_id = clientCon->rect_id;
 
     LLOGLN(10, ("rdpDeferredUpdateCallback:"));
     clientCon->updateScheduled = FALSE;
@@ -2911,61 +2919,18 @@ rdpDeferredUpdateCallback(OsTimerPtr timer, CARD32 now, pointer arg)
     clientCon->lastUpdateTime = now;
     LLOGLN(10, ("rdpDeferredUpdateCallback: sending"));
     clientCon->updateRetries = 0;
-    rdpClientConGetScreenImageRect(clientCon->dev, clientCon, &id);
-    LLOGLN(10, ("rdpDeferredUpdateCallback: rdp_width %d rdp_height %d "
-           "rdp_Bpp %d screen width %d screen height %d",
-           clientCon->rdp_width, clientCon->rdp_height, clientCon->rdp_Bpp,
-           id.width, id.height));
     if (clientCon->dev->monitorCount < 1)
     {
-        dirty_extents = *rdpRegionExtents(clientCon->dirtyRegion);
-        dirty_extents.x1 = RDPMAX(dirty_extents.x1, 0);
-        dirty_extents.y1 = RDPMAX(dirty_extents.y1, 0);
-        dirty_extents.x2 = RDPMIN(dirty_extents.x2, clientCon->rdp_width);
-        dirty_extents.y2 = RDPMIN(dirty_extents.y2, clientCon->rdp_height);
-        LLOGLN(10, ("rdpDeferredUpdateCallback: dirty_extents %d %d %d %d",
-               dirty_extents.x1, dirty_extents.y1,
-               dirty_extents.x2, dirty_extents.y2));
-        de_width = dirty_extents.x2 - dirty_extents.x1;
-        de_height = dirty_extents.y2 - dirty_extents.y1;
-        if ((de_width > 0) && (de_height > 0))
-        {
-            band_height = MAX_CAPTURE_PIXELS / de_width;
-            band_index = 0;
-            band_count = (de_width * de_height / MAX_CAPTURE_PIXELS) + 1;
-            LLOGLN(10, ("rdpDeferredUpdateCallback: band_index %d "
-                   "band_count %d", band_index, band_count));
-            while (band_index < band_count)
-            {
-                if (clientCon->rect_id > clientCon->rect_id_ack)
-                {
-                    LLOGLN(10, ("rdpDeferredUpdateCallback: reschedule "
-                           "rect_id %d rect_id_ack %d",
-                           clientCon->rect_id, clientCon->rect_id_ack));
-                    break;
-                }
-                index = (clientCon->rect_id + band_index) % band_count;
-                cap_rect.x1 = dirty_extents.x1;
-                cap_rect.y1 = dirty_extents.y1 + index * band_height;
-                cap_rect.x2 = dirty_extents.x2;
-                cap_rect.y2 = RDPMIN(cap_rect.y1 + band_height,
-                                     dirty_extents.y2);
-                rdpCapRect(clientCon, &cap_rect, &id);
-                band_index++;
-            }
-            if (band_index == band_count)
-            {
-                /* gone through all bands, nothing changed */
-                rdpRegionDestroy(clientCon->dirtyRegion);
-                clientCon->dirtyRegion = rdpRegionCreate(NullBox, 0);
-            }
-        }
-        else
-        {
-            /* nothing changed in visible area */
-            rdpRegionDestroy(clientCon->dirtyRegion);
-            clientCon->dirtyRegion = rdpRegionCreate(NullBox, 0);
-        }
+        cap_rect.x1 = 0;
+        cap_rect.y1 = 0;
+        cap_rect.x2 = clientCon->rdp_width;
+        cap_rect.y2 = clientCon->rdp_height;
+        rdpClientConGetScreenImageRect(clientCon->dev, clientCon, &id);
+        id.left = cap_rect.x1;
+        id.top = cap_rect.y1;
+        id.width = cap_rect.x2 - cap_rect.x1;
+        id.height = cap_rect.y2 - cap_rect.y1;
+        rdpCapRect(clientCon, &cap_rect, 0, &id);
     }
     else
     {
@@ -2973,6 +2938,7 @@ rdpDeferredUpdateCallback(OsTimerPtr timer, CARD32 now, pointer arg)
         monitor_count = clientCon->dev->monitorCount;
         while (monitor_index < monitor_count)
         {
+            // Did we get anything from the last monitor?
             if (clientCon->rect_id > clientCon->rect_id_ack)
             {
                 LLOGLN(10, ("rdpDeferredUpdateCallback: reschedule rect_id %d "
@@ -2980,6 +2946,8 @@ rdpDeferredUpdateCallback(OsTimerPtr timer, CARD32 now, pointer arg)
                        clientCon->rect_id, clientCon->rect_id_ack));
                 break;
             }
+            // Offset the monitor index by the rectangle ID so we start
+            // the monitor scan on a different monitor each time.
             index = (clientCon->rect_id + monitor_index) % monitor_count;
             cap_rect.x1 = clientCon->dev->minfo[index].left;
             cap_rect.y1 = clientCon->dev->minfo[index].top;
@@ -2991,7 +2959,7 @@ rdpDeferredUpdateCallback(OsTimerPtr timer, CARD32 now, pointer arg)
             id.width = cap_rect.x2 - cap_rect.x1;
             id.height = cap_rect.y2 - cap_rect.y1;
             id.flags = (index & 0xF) << 28;
-            rdpCapRect(clientCon, &cap_rect, &id);
+            rdpCapRect(clientCon, &cap_rect, index, &id);
             monitor_index++;
         }
         if (monitor_index == monitor_count)
@@ -3006,14 +2974,6 @@ rdpDeferredUpdateCallback(OsTimerPtr timer, CARD32 now, pointer arg)
         rdpScheduleDeferredUpdate(clientCon);
     }
 
-    // The user can request all frames be ack'd by sending INT_MAX as
-    // an acknowledgement frame number. If this has happened, reset the
-    // ack frame to a sensible value to prevent us overwriting the
-    // shared memory buffer while it's being copied.
-    if (clientCon->rect_id_ack == INT_MAX)
-    {
-        clientCon->rect_id_ack = entry_rect_id;
-    }
     return 0;
 }
 
