@@ -45,6 +45,9 @@ This is the main driver file
 
 #include <xf86Modes.h>
 
+#include <sys/ioctl.h>
+#include <drm.h>
+
 #include "rdp.h"
 #include "rdpPri.h"
 #include "rdpDraw.h"
@@ -72,6 +75,7 @@ This is the main driver file
 char g_drm_device[128] = "/dev/dri/renderD128";
 Bool g_use_dri2 = TRUE;
 Bool g_use_dri3 = TRUE;
+char g_drm_allow_list[128] = "";
 #endif
 
 #define LLOG_LEVEL 1
@@ -185,8 +189,47 @@ rdpPreInit(ScrnInfoPtr pScrn, int flags)
     }
     else
     {
+        struct drm_version dver;
+        char delim[] = " ";
+        char *token;
         LLOGLN(0, ("rdpPreInit: %s open ok, fd %d", g_drm_device, dev->fd));
-        dev->glamor = TRUE;
+        memset(&dver, 0, sizeof(dver));
+        dver.name_len = 256;
+        dver.name = g_new0(char, dver.name_len);
+        dver.date_len = 256;
+        dver.date = g_new0(char, dver.date_len);
+        dver.desc_len = 256;
+        dver.desc = g_new0(char, dver.desc_len);
+        if (ioctl(dev->fd, DRM_IOCTL_VERSION, &dver) != -1)
+        {
+            LLOGLN(0, ("rdpPreInit: name [%s]", dver.name));
+            LLOGLN(0, ("rdpPreInit: date [%s]", dver.date));
+            LLOGLN(0, ("rdpPreInit: desc [%s]", dver.desc));
+            token = strtok(g_drm_allow_list, delim);
+            while (token != NULL)
+            {
+                LLOGLN(10, ("rdpPreInit: token [%s]", token));
+                if (strstr(dver.name, token) != NULL)
+                {
+                    dev->glamor = TRUE;
+                    LLOGLN(0, ("rdpPreInit: drm device looks ok, "
+                           "use glamor set"));
+                    break;
+                }
+                token = strtok(NULL, delim);
+            }
+            if (dev->glamor == FALSE)
+            {
+                LLOGLN(0, ("rdpPreInit: unsupported render node"));
+            }
+        }
+        else
+        {
+            LLOGLN(0, ("rdpPreInit: DRM_IOCTL_VERSION failed"));
+        }
+        free(dver.name);
+        free(dver.date);
+        free(dver.desc);
     }
 #endif
 
@@ -934,6 +977,15 @@ rdpProbe(DriverPtr drv, int flags)
                g_use_dri3 = 0;
             }
             LLOGLN(0, ("rdpProbe: found DRI3 xorg.conf value [%s]", val));
+#endif
+        }
+        val = xf86FindOptionValue(dev_sections[i]->options, "DRMAllowList");
+        if (val != NULL)
+        {
+#if defined(XORGXRDP_GLAMOR)
+            strncpy(g_drm_allow_list, val, 127);
+            g_drm_device[127] = 0;
+            LLOGLN(0, ("rdpProbe: found DRMAllowList xorg.conf value [%s]", val));
 #endif
         }
         entity = xf86ClaimFbSlot(drv, 0, dev_sections[i], 1);
