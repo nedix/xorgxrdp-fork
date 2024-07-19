@@ -258,14 +258,6 @@ rdpSpriteSetCursorCon(rdpClientCon *clientCon,
         LLOGLN(10, ("rdpSpriteSetCursorCon: suppress_output set"));
         return;
     }
-    if (pCurs == NULL)
-    {
-        return;
-    }
-    if (pCurs->bits == NULL)
-    {
-        return;
-    }
     if (clientCon->client_info.size == 0)
     {
         return;
@@ -286,18 +278,28 @@ rdpSpriteSetCursorCon(rdpClientCon *clientCon,
 #else
     can_do_large = 0;
 #endif
-    if (can_do_new || can_do_large)
+    if ((pCurs == NULL) || (pCurs->bits == NULL))
     {
-        if (pCurs->bits->argb != NULL)
-        {
-            sending_bpp = 32;
-        }
+        /* None cursor */
+        sending_width = 32;
+        sending_height = 32;
+        xhot = 0;
+        yhot = 0;
+        memset(cur_data, 0, 96 * 96 * 4);
+        memset(cur_mask, 0xFF, 96 * 96 / 8);
     }
-    server_width = pCurs->bits->width;
-    server_height = pCurs->bits->height;
-    if ((server_width > 32) || (server_height > 32))
+    else
     {
-        if (sending_bpp == 32)
+        if (can_do_new || can_do_large)
+        {
+            if (pCurs->bits->argb != NULL)
+            {
+                sending_bpp = 32;
+            }
+        }
+        server_width = pCurs->bits->width;
+        server_height = pCurs->bits->height;
+        if ((server_width > 32) || (server_height > 32))
         {
             if (can_do_large)
             {
@@ -305,66 +307,69 @@ rdpSpriteSetCursorCon(rdpClientCon *clientCon,
                 client_max_height = 96;
             }
         }
-    }
-    sending_width = server_width > 32 ? client_max_width : 32;
-    sending_height = server_height > 32 ? client_max_height : 32;
-    LLOGLN(10, ("rdpSpriteSetCursorCon: sending_width %d sending_height %d "
-           "server_width %d server_height %d sending_bpp %d",
-           sending_width, sending_height, server_width, server_height,
-           sending_bpp));
-    if (sending_bpp == 32)
-    {
-        paddedRowBytes = PixmapBytePad(server_width, 32);
-        xhot = pCurs->bits->xhot;
-        yhot = pCurs->bits->yhot;
-        data = (uint8_t *)(pCurs->bits->argb);
-        memset(cur_data, 0, 96 * 96 * 4);
-        memset(cur_mask, 0, 96 * 96 / 8);
-        for (jndex = 0; jndex < sending_height; jndex++)
+        sending_width = server_width > 32 ? client_max_width : 32;
+        sending_height = server_height > 32 ? client_max_height : 32;
+        LLOGLN(10, ("rdpSpriteSetCursorCon: sending_width %d "
+               "sending_height %d server_width %d server_height %d "
+               "sending_bpp %d", sending_width, sending_height,
+               server_width, server_height, sending_bpp));
+        if (sending_bpp == 32)
         {
-            for (index = 0; index < sending_width; index++)
+            paddedRowBytes = PixmapBytePad(server_width, 32);
+            xhot = pCurs->bits->xhot;
+            yhot = pCurs->bits->yhot;
+            data = (uint8_t *)(pCurs->bits->argb);
+            memset(cur_data, 0, 96 * 96 * 4);
+            memset(cur_mask, 0, 96 * 96 / 8);
+            for (jndex = 0; jndex < sending_height; jndex++)
             {
-                pixel = get_pixel_safe(data, index, jndex, paddedRowBytes / 4,
-                                   server_height, 32);
-                set_pixel_safe(cur_data, index, (sending_height - 1) - jndex,
-                               sending_width, sending_height, 32, pixel);
-            }
-        }
-    }
-    else
-    {
-        paddedRowBytes = PixmapBytePad(server_width, 1);
-        xhot = pCurs->bits->xhot;
-        yhot = pCurs->bits->yhot;
-        data = (uint8_t *)(pCurs->bits->source);
-        mask = (uint8_t *)(pCurs->bits->mask);
-        fgcolor = (((pCurs->foreRed >> 8) & 0xff) << 16) |
-                  (((pCurs->foreGreen >> 8) & 0xff) << 8) |
-                  ((pCurs->foreBlue >> 8) & 0xff);
-        bgcolor = (((pCurs->backRed >> 8) & 0xff) << 16) |
-                  (((pCurs->backGreen >> 8) & 0xff) << 8) |
-                  ((pCurs->backBlue >> 8) & 0xff);
-        memset(cur_data, 0, 96 * 96 * 4);
-        memset(cur_mask, 0, 96 * 96 / 8);
-        for (jndex = 0; jndex < sending_height; jndex++)
-        {
-            for (index = 0; index < sending_width; index++)
-            {
-                pixel = get_pixel_safe(mask, index, jndex,
-                                       paddedRowBytes * 8,
-                                       server_height, 1);
-                set_pixel_safe(cur_mask, index,
-                               (sending_height - 1) - jndex,
-                               sending_width, sending_height, 1, !pixel);
-                if (pixel != 0)
+                for (index = 0; index < sending_width; index++)
                 {
                     pixel = get_pixel_safe(data, index, jndex,
-                                           paddedRowBytes * 8,
-                                           server_height, 1);
-                    pixel = pixel ? fgcolor : bgcolor;
+                                           paddedRowBytes / 4,
+                                           server_height, 32);
                     set_pixel_safe(cur_data, index,
                                    (sending_height - 1) - jndex,
-                                   sending_width, sending_height, 24, pixel);
+                                   sending_width, sending_height, 32, pixel);
+                }
+            }
+        }
+        else
+        {
+            paddedRowBytes = PixmapBytePad(server_width, 1);
+            xhot = pCurs->bits->xhot;
+            yhot = pCurs->bits->yhot;
+            data = (uint8_t *)(pCurs->bits->source);
+            mask = (uint8_t *)(pCurs->bits->mask);
+            fgcolor = (((pCurs->foreRed >> 8) & 0xff) << 16) |
+                    (((pCurs->foreGreen >> 8) & 0xff) << 8) |
+                    ((pCurs->foreBlue >> 8) & 0xff);
+            bgcolor = (((pCurs->backRed >> 8) & 0xff) << 16) |
+                    (((pCurs->backGreen >> 8) & 0xff) << 8) |
+                    ((pCurs->backBlue >> 8) & 0xff);
+            memset(cur_data, 0, 96 * 96 * 4);
+            memset(cur_mask, 0, 96 * 96 / 8);
+            for (jndex = 0; jndex < sending_height; jndex++)
+            {
+                for (index = 0; index < sending_width; index++)
+                {
+                    pixel = get_pixel_safe(mask, index, jndex,
+                                           paddedRowBytes * 8,
+                                           server_height, 1);
+                    set_pixel_safe(cur_mask, index,
+                                   (sending_height - 1) - jndex,
+                                   sending_width, sending_height, 1, !pixel);
+                    if (pixel != 0)
+                    {
+                        pixel = get_pixel_safe(data, index, jndex,
+                                               paddedRowBytes * 8,
+                                               server_height, 1);
+                        pixel = pixel ? fgcolor : bgcolor;
+                        set_pixel_safe(cur_data, index,
+                                       (sending_height - 1) - jndex,
+                                       sending_width, sending_height,
+                                       24, pixel);
+                    }
                 }
             }
         }
@@ -394,16 +399,6 @@ rdpSpriteSetCursor(DeviceIntPtr pDev, ScreenPtr pScr, CursorPtr pCurs,
     rdpClientCon *clientCon;
 
     LLOGLN(10, ("rdpSpriteSetCursor:"));
-    if (pCurs == 0)
-    {
-        return;
-    }
-
-    if (pCurs->bits == 0)
-    {
-        return;
-    }
-
     dev = rdpGetDevFromScreen(pScr);
     clientCon = dev->clientConHead;
     while (clientCon != NULL)
