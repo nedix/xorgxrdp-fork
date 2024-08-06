@@ -45,9 +45,6 @@ This is the main driver file
 
 #include <xf86Modes.h>
 
-#include <sys/ioctl.h>
-#include <drm.h>
-
 #include "rdp.h"
 #include "rdpPri.h"
 #include "rdpDraw.h"
@@ -69,7 +66,9 @@ This is the main driver file
 #include "xrdpdri2.h"
 #include "xrdpdri3.h"
 #include "rdpEgl.h"
+#include <drm.h>
 #include <glamor.h>
+#include <sys/ioctl.h>
 /* use environment variable XORGXRDP_DRM_DEVICE to override
  * also read from xorg.conf file */
 char g_drm_device[128] = "/dev/dri/renderD128";
