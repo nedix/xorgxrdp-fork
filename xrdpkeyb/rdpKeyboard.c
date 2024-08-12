@@ -65,6 +65,11 @@ xrdp keyboard module
 #define LLOGLN(_level, _args) \
     do { if (_level < LOG_LEVEL) { ErrorF _args ; ErrorF("\n"); } } while (0)
 
+/* A few hard-coded evdev keycodes (see g_evdev_str) */
+#define CAPS_LOCK_KEY_CODE 66
+#define NUM_LOCK_KEY_CODE 77
+#define SCROLL_LOCK_KEY_CODE 78
+
 static char g_evdev_str[] = "evdev";
 static char g_pc104_str[] = "pc104";
 static char g_us_str[] = "us";
@@ -393,7 +398,6 @@ static int
 rdpkeybControl(DeviceIntPtr device, int what)
 {
     DevicePtr pDev;
-    XkbRMLVOSet set;
     rdpPtr dev;
 
     LLOGLN(0, ("rdpkeybControl: what %d", what));
@@ -402,16 +406,9 @@ rdpkeybControl(DeviceIntPtr device, int what)
     switch (what)
     {
         case DEVICE_INIT:
-            memset(&set, 0, sizeof(set));
-            set.rules = g_evdev_str;
-            set.model = g_pc104_str;
-            set.layout = g_us_str;
-            set.variant = g_empty_str;
-            set.options = g_empty_str;
-            InitKeyboardDeviceStruct(device, &set, rdpkeybBell,
-                                     rdpkeybChangeKeyboardControl);
             dev = rdpGetDevFromScreen(NULL);
             dev->keyboard.device = device;
+            rdpLoadLayout(&(dev->keyboard), NULL);
             rdpRegisterInputCallback(0, rdpInputKeyboard);
             break;
         case DEVICE_ON:
@@ -517,29 +514,35 @@ rdpkeybUnplug(pointer p)
 static int
 reload_xkb(DeviceIntPtr keyboard, XkbRMLVOSet *set)
 {
-    XkbSrvInfoPtr xkbi;
-    XkbDescPtr xkb;
     KeySymsPtr keySyms;
     KeyCode first_key;
     CARD8 num_keys;
     DeviceIntPtr pDev;
 
     /* free some stuff so we can call InitKeyboardDeviceStruct again */
-    xkbi = keyboard->key->xkbInfo;
-    xkb = xkbi->desc;
-    XkbFreeKeyboard(xkb, 0, TRUE);
-    free(xkbi);
-    keyboard->key->xkbInfo = NULL;
-    free(keyboard->kbdfeed);
-    keyboard->kbdfeed = NULL;
-    free(keyboard->key);
-    keyboard->key = NULL;
+    if (keyboard->key != NULL)
+    {
+        XkbSrvInfoPtr xkbi = keyboard->key->xkbInfo;
+        if (xkbi != NULL)
+        {
+            XkbDescPtr xkb = xkbi->desc;
+            if (xkb != NULL)
+            {
+                XkbFreeKeyboard(xkb, 0, TRUE);
+            }
+            free(xkbi);
+        }
+        free(keyboard->kbdfeed);
+        keyboard->kbdfeed = NULL;
+        free(keyboard->key);
+        keyboard->key = NULL;
+    }
 
     /* init keyboard and reload the map */
     if (!InitKeyboardDeviceStruct(keyboard, set, rdpkeybBell,
                                   rdpkeybChangeKeyboardControl))
     {
-        LLOGLN(0, ("rdpLoadLayout: InitKeyboardDeviceStruct failed"));
+        LLOGLN(0, ("reload_xkb: InitKeyboardDeviceStruct failed"));
         return 1;
     }
 
@@ -573,48 +576,58 @@ reload_xkb(DeviceIntPtr keyboard, XkbRMLVOSet *set)
 static int
 rdpLoadLayout(rdpKeyboard *keyboard, struct xrdp_client_info *client_info)
 {
-    XkbRMLVOSet set;
+    // Load default layout parameters
+    XkbRMLVOSet set =
+    {
+        .rules = g_evdev_str,
+        .model = g_pc104_str,
+        .layout = g_us_str,
+        .variant = g_empty_str,
+        .options = g_empty_str
+    };
 
-    int keylayout = client_info->keylayout;
+    if (client_info != NULL)
+    {
+        if (strlen(client_info->model) > 0)
+        {
+            set.model = client_info->model;
+        }
+        if (strlen(client_info->variant) > 0)
+        {
+            set.variant = client_info->variant;
+        }
+        if (strlen(client_info->layout) > 0)
+        {
+            set.layout = client_info->layout;
+        }
+        if (strlen(client_info->options) > 0)
+        {
+            set.options = client_info->options;
+        }
+        if (strlen(client_info->xkb_rules) > 0)
+        {
+            set.rules = client_info->xkb_rules;
+        }
 
-    LLOGLN(0, ("rdpLoadLayout: keylayout 0x%8.8x variant %s display %s",
-               keylayout, client_info->variant, display));
-    memset(&set, 0, sizeof(set));
-    set.rules = g_evdev_str;
+        /* X11 keycodes needed to sync the keyboard */
+        keyboard->x11_keycode_caps_lock = client_info->x11_keycode_caps_lock;
+        keyboard->x11_keycode_num_lock = client_info->x11_keycode_num_lock;
+        keyboard->x11_keycode_scroll_lock = client_info->x11_keycode_scroll_lock;
+    }
+    else
+    {
+        keyboard->x11_keycode_caps_lock = CAPS_LOCK_KEY_CODE;
+        keyboard->x11_keycode_num_lock = NUM_LOCK_KEY_CODE;
+        keyboard->x11_keycode_scroll_lock = SCROLL_LOCK_KEY_CODE;
+    }
 
-    set.model = g_pc104_str;
-    set.layout = g_us_str;
-    set.variant = g_empty_str;
-    set.options = g_empty_str;
-
-    if (strlen(client_info->model) > 0)
-    {
-        set.model = client_info->model;
-    }
-    if (strlen(client_info->variant) > 0)
-    {
-        set.variant = client_info->variant;
-    }
-    if (strlen(client_info->layout) > 0)
-    {
-        set.layout = client_info->layout;
-    }
-    if (strlen(client_info->options) > 0)
-    {
-        set.options = client_info->options;
-    }
-    if (strlen(client_info->xkb_rules) > 0)
-    {
-        set.rules = client_info->xkb_rules;
-    }
+    LLOGLN(0, ("rdpLoadLayout: rules=\"%s\" model=\"%s\" variant=\"%s\""
+               "layout=\"%s\" options=\"%s\"",
+               set.rules, set.model, set.variant, set.layout, set.options));
 
     reload_xkb(keyboard->device, &set);
     reload_xkb(inputInfo.keyboard, &set);
 
-    /* Copy X11 keycodes needed to sync the keyboard */
-    keyboard->x11_keycode_caps_lock = client_info->x11_keycode_caps_lock;
-    keyboard->x11_keycode_num_lock = client_info->x11_keycode_num_lock;
-    keyboard->x11_keycode_scroll_lock = client_info->x11_keycode_scroll_lock;
     return 0;
 }
 
