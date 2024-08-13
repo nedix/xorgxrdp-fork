@@ -410,7 +410,8 @@ rdpRRAddOutput(rdpPtr dev, const char *aname)
 /******************************************************************************/
 static int
 rdpRRConnectOutput(RROutputPtr output, RRCrtcPtr crtc,
-                   int x, int y, int width, int height)
+                   int x, int y, int width, int height,
+                   int mmwidth, int mmheight)
 {
     RRModePtr mode;
     xRRModeInfo modeInfo = {0};
@@ -454,6 +455,11 @@ rdpRRConnectOutput(RROutputPtr output, RRCrtcPtr crtc,
     if (!RROutputSetConnection(output, RR_Connected))
     {
         LLOGLN(0, ("rdpRRConnectOutput: RROutputSetConnection failed"));
+        return 1;
+    }
+    if (!RROutputSetPhysicalSize(output, mmwidth, mmheight))
+    {
+        LLOGLN(0, ("rdpRRConnectOutput: RROutputSetPhysicalSize failed"));
         return 1;
     }
     RRCrtcNotify(crtc, mode, x, y, RR_Rotate_0, NULL, 1, &output);
@@ -517,6 +523,8 @@ rdpRRSetRdpOutputs(rdpPtr dev)
     int top;
     int width;
     int height;
+    int mmwidth;
+    int mmheight;
     int rv = 0;
 
     pRRScrPriv = rrGetScrPriv(dev->pScreen);
@@ -548,12 +556,15 @@ rdpRRSetRdpOutputs(rdpPtr dev)
         top = 0;
         width = dev->width;
         height = dev->height;
+        mmwidth = dev->pScreen->mmWidth;
+        mmheight = dev->pScreen->mmHeight;
         LLOGLN(0, ("rdpRRSetRdpOutputs: update output %d "
                "left %d top %d width %d height %d",
                0, left, top, width, height));
         rv = rdpRRConnectOutput(pRRScrPriv->outputs[0],
                                 pRRScrPriv->crtcs[0],
-                                left, top, width, height);
+                                left, top, width, height,
+                                mmwidth, mmheight);
         index = 1;
     }
     else
@@ -564,12 +575,15 @@ rdpRRSetRdpOutputs(rdpPtr dev)
             top = dev->minfo[index].top;
             width = dev->minfo[index].right - dev->minfo[index].left + 1;
             height = dev->minfo[index].bottom - dev->minfo[index].top + 1;
+            mmwidth = dev->minfo[index].physical_width;
+            mmheight = dev->minfo[index].physical_height;
             LLOGLN(0, ("rdpRRSetRdpOutputs: update output %d "
                    "left %d top %d width %d height %d",
                    index, left, top, width, height));
             rv = rdpRRConnectOutput(pRRScrPriv->outputs[index],
                                     pRRScrPriv->crtcs[index],
-                                    left, top, width, height);
+                                    left, top, width, height,
+                                    mmwidth, mmheight);
             if ((rv == 0) && (dev->minfo[index].is_primary))
             {
                 RRSetPrimaryOutput(pRRScrPriv, pRRScrPriv->outputs[index]);
