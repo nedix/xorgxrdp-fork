@@ -65,31 +65,10 @@ xrdp keyboard module
 #define LLOGLN(_level, _args) \
     do { if (_level < LOG_LEVEL) { ErrorF _args ; ErrorF("\n"); } } while (0)
 
-#define MIN_KEY_CODE 8
-#define MAX_KEY_CODE 255
-#define GLYPHS_PER_KEY 2
-
-/* Define some evdev keycodes for rdpkeybDeviceInit() only. These are
- * overridden when we get the client_info */
-/* control */
-#define CONTROL_L_KEY_CODE 37
-#define CONTROL_R_KEY_CODE 105
-/* shift */
-#define SHIFT_L_KEY_CODE 50
-#define SHIFT_R_KEY_CODE 62
-/* win keys */
-#define SUPER_L_KEY_CODE 133
-#define SUPER_R_KEY_CODE 134
-/* alt */
-#define ALT_L_KEY_CODE 64
-#define ALT_R_KEY_CODE 108
-/* caps lock */
+/* A few hard-coded evdev keycodes (see g_evdev_str) */
 #define CAPS_LOCK_KEY_CODE 66
-/* num lock */
 #define NUM_LOCK_KEY_CODE 77
-
-#define N_PREDEFINED_KEYS \
-    (sizeof(g_kbdMap) / (sizeof(KeySym) * GLYPHS_PER_KEY))
+#define SCROLL_LOCK_KEY_CODE 78
 
 static char g_evdev_str[] = "evdev";
 static char g_pc104_str[] = "pc104";
@@ -98,124 +77,6 @@ static char g_empty_str[] = "";
 static char g_Keyboard_str[] = "Keyboard";
 
 static char g_xrdp_keyb_name[] = XRDP_KEYB_NAME;
-
-static KeySym g_kbdMap[] =
-{
-    NoSymbol,        NoSymbol,        /* 8 */
-    XK_Escape,       NoSymbol,        /* 9 */
-    XK_1,            XK_exclam,       /* 10 */
-    XK_2,            XK_at,
-    XK_3,            XK_numbersign,
-    XK_4,            XK_dollar,
-    XK_5,            XK_percent,
-    XK_6,            XK_asciicircum,
-    XK_7,            XK_ampersand,
-    XK_8,            XK_asterisk,
-    XK_9,            XK_parenleft,
-    XK_0,            XK_parenright,
-    XK_minus,        XK_underscore,   /* 20 */
-    XK_equal,        XK_plus,
-    XK_BackSpace,    NoSymbol,
-    XK_Tab,          XK_ISO_Left_Tab,
-    XK_Q,            NoSymbol,
-    XK_W,            NoSymbol,
-    XK_E,            NoSymbol,
-    XK_R,            NoSymbol,
-    XK_T,            NoSymbol,
-    XK_Y,            NoSymbol,
-    XK_U,            NoSymbol,        /* 30 */
-    XK_I,            NoSymbol,
-    XK_O,            NoSymbol,
-    XK_P,            NoSymbol,
-    XK_bracketleft,  XK_braceleft,
-    XK_bracketright, XK_braceright,
-    XK_Return,       NoSymbol,
-    XK_Control_L,    NoSymbol,
-    XK_A,            NoSymbol,
-    XK_S,            NoSymbol,
-    XK_D,            NoSymbol,        /* 40 */
-    XK_F,            NoSymbol,
-    XK_G,            NoSymbol,
-    XK_H,            NoSymbol,
-    XK_J,            NoSymbol,
-    XK_K,            NoSymbol,
-    XK_L,            NoSymbol,
-    XK_semicolon,    XK_colon,
-    XK_apostrophe,   XK_quotedbl,
-    XK_grave,        XK_asciitilde,
-    XK_Shift_L,      NoSymbol,        /* 50 */
-    XK_backslash,    XK_bar,
-    XK_Z,            NoSymbol,
-    XK_X,            NoSymbol,
-    XK_C,            NoSymbol,
-    XK_V,            NoSymbol,
-    XK_B,            NoSymbol,
-    XK_N,            NoSymbol,
-    XK_M,            NoSymbol,
-    XK_comma,        XK_less,
-    XK_period,       XK_greater,      /* 60 */
-    XK_slash,        XK_question,
-    XK_Shift_R,      NoSymbol,
-    XK_KP_Multiply,  NoSymbol,
-    XK_Alt_L,        NoSymbol,
-    XK_space,        NoSymbol,
-    XK_Caps_Lock,    NoSymbol,
-    XK_F1,           NoSymbol,
-    XK_F2,           NoSymbol,
-    XK_F3,           NoSymbol,
-    XK_F4,           NoSymbol,        /* 70 */
-    XK_F5,           NoSymbol,
-    XK_F6,           NoSymbol,
-    XK_F7,           NoSymbol,
-    XK_F8,           NoSymbol,
-    XK_F9,           NoSymbol,
-    XK_F10,          NoSymbol,
-    XK_Num_Lock,     NoSymbol,
-    XK_Scroll_Lock,  NoSymbol,
-    XK_KP_Home,      XK_KP_7,
-    XK_KP_Up,        XK_KP_8,         /* 80 */
-    XK_KP_Prior,     XK_KP_9,
-    XK_KP_Subtract,  NoSymbol,
-    XK_KP_Left,      XK_KP_4,
-    XK_KP_Begin,     XK_KP_5,
-    XK_KP_Right,     XK_KP_6,
-    XK_KP_Add,       NoSymbol,
-    XK_KP_End,       XK_KP_1,
-    XK_KP_Down,      XK_KP_2,
-    XK_KP_Next,      XK_KP_3,
-    XK_KP_Insert,    XK_KP_0,         /* 90 */
-    XK_KP_Delete,    XK_KP_Decimal,
-    NoSymbol,        NoSymbol,
-    NoSymbol,        NoSymbol,
-    NoSymbol,        NoSymbol,
-    XK_F11,          NoSymbol,
-    XK_F12,          NoSymbol,
-    XK_Home,         NoSymbol,
-    XK_Up,           NoSymbol,
-    XK_Prior,        NoSymbol,
-    XK_Left,         NoSymbol,        /* 100 */
-    XK_Print,        NoSymbol,
-    XK_Right,        NoSymbol,
-    XK_End,          NoSymbol,
-    XK_Down,         NoSymbol,
-    XK_Next,         NoSymbol,
-    XK_Insert,       NoSymbol,
-    XK_Delete,       NoSymbol,
-    XK_KP_Enter,     NoSymbol,
-    XK_Control_R,    NoSymbol,
-    XK_Pause,        NoSymbol,        /* 110 */
-    XK_Print,        NoSymbol,
-    XK_KP_Divide,    NoSymbol,
-    XK_Alt_R,        NoSymbol,
-    NoSymbol,        NoSymbol,
-    XK_Super_L,      NoSymbol,
-    XK_Super_R,      NoSymbol,
-    XK_Menu,         NoSymbol,
-    NoSymbol,        NoSymbol,
-    NoSymbol,        NoSymbol,
-    NoSymbol,        NoSymbol,        /* 120 */
-    NoSymbol,        NoSymbol
-};
 
 static int
 rdpLoadLayout(rdpKeyboard *keyboard, struct xrdp_client_info *client_info);
@@ -443,52 +304,6 @@ rdpInputKeyboard(rdpPtr dev, int msg, long param1, long param2,
 }
 
 /******************************************************************************/
-void
-rdpkeybDeviceInit(DeviceIntPtr pDevice, KeySymsPtr pKeySyms, CARD8 *pModMap)
-{
-    int i;
-
-    LLOGLN(0, ("rdpkeybDeviceInit:"));
-    LLOGLN(10, ("  MAP_LENGTH %d GLYPHS_PER_KEY %d N_PREDEFINED_KEYS %d",
-           MAP_LENGTH, GLYPHS_PER_KEY, (int) N_PREDEFINED_KEYS));
-
-    for (i = 0; i < MAP_LENGTH; i++)
-    {
-        pModMap[i] = NoSymbol;
-    }
-
-    pModMap[SHIFT_L_KEY_CODE] = ShiftMask;
-    pModMap[SHIFT_R_KEY_CODE] = ShiftMask;
-    pModMap[CAPS_LOCK_KEY_CODE] = LockMask;
-    pModMap[CONTROL_L_KEY_CODE] = ControlMask;
-    pModMap[CONTROL_R_KEY_CODE] = ControlMask;
-    pModMap[ALT_L_KEY_CODE] = Mod1Mask;
-    pModMap[ALT_R_KEY_CODE] = Mod1Mask;
-    pModMap[NUM_LOCK_KEY_CODE] = Mod2Mask;
-    pModMap[SUPER_L_KEY_CODE] = Mod4Mask;
-    pModMap[SUPER_R_KEY_CODE] = Mod4Mask;
-    pKeySyms->minKeyCode = MIN_KEY_CODE;
-    pKeySyms->maxKeyCode = MAX_KEY_CODE;
-    pKeySyms->mapWidth = GLYPHS_PER_KEY;
-    pKeySyms->map = g_new0(KeySym, MAP_LENGTH * GLYPHS_PER_KEY);
-    if (pKeySyms->map == 0)
-    {
-        LLOGLN(0, ("rdpkeybDeviceInit: out of memory"));
-        exit(1);
-    }
-
-    for (i = 0; i < MAP_LENGTH * GLYPHS_PER_KEY; i++)
-    {
-        pKeySyms->map[i] = NoSymbol;
-    }
-
-    for (i = 0; i < N_PREDEFINED_KEYS * GLYPHS_PER_KEY; i++)
-    {
-        pKeySyms->map[i] = g_kbdMap[i];
-    }
-}
-
-/******************************************************************************/
 static void
 rdpkeybDeviceOn(void)
 {
@@ -582,10 +397,7 @@ rdpkeybChangeKeyboardControl(DeviceIntPtr pDev, KeybdCtrl *ctrl)
 static int
 rdpkeybControl(DeviceIntPtr device, int what)
 {
-    KeySymsRec keySyms;
-    CARD8 modMap[MAP_LENGTH];
     DevicePtr pDev;
-    XkbRMLVOSet set;
     rdpPtr dev;
 
     LLOGLN(0, ("rdpkeybControl: what %d", what));
@@ -594,17 +406,9 @@ rdpkeybControl(DeviceIntPtr device, int what)
     switch (what)
     {
         case DEVICE_INIT:
-            rdpkeybDeviceInit(device, &keySyms, modMap);
-            memset(&set, 0, sizeof(set));
-            set.rules = g_evdev_str;
-            set.model = g_pc104_str;
-            set.layout = g_us_str;
-            set.variant = g_empty_str;
-            set.options = g_empty_str;
-            InitKeyboardDeviceStruct(device, &set, rdpkeybBell,
-                                     rdpkeybChangeKeyboardControl);
             dev = rdpGetDevFromScreen(NULL);
             dev->keyboard.device = device;
+            rdpLoadLayout(&(dev->keyboard), NULL);
             rdpRegisterInputCallback(0, rdpInputKeyboard);
             break;
         case DEVICE_ON:
@@ -710,29 +514,35 @@ rdpkeybUnplug(pointer p)
 static int
 reload_xkb(DeviceIntPtr keyboard, XkbRMLVOSet *set)
 {
-    XkbSrvInfoPtr xkbi;
-    XkbDescPtr xkb;
     KeySymsPtr keySyms;
     KeyCode first_key;
     CARD8 num_keys;
     DeviceIntPtr pDev;
 
     /* free some stuff so we can call InitKeyboardDeviceStruct again */
-    xkbi = keyboard->key->xkbInfo;
-    xkb = xkbi->desc;
-    XkbFreeKeyboard(xkb, 0, TRUE);
-    free(xkbi);
-    keyboard->key->xkbInfo = NULL;
-    free(keyboard->kbdfeed);
-    keyboard->kbdfeed = NULL;
-    free(keyboard->key);
-    keyboard->key = NULL;
+    if (keyboard->key != NULL)
+    {
+        XkbSrvInfoPtr xkbi = keyboard->key->xkbInfo;
+        if (xkbi != NULL)
+        {
+            XkbDescPtr xkb = xkbi->desc;
+            if (xkb != NULL)
+            {
+                XkbFreeKeyboard(xkb, 0, TRUE);
+            }
+            free(xkbi);
+        }
+        free(keyboard->kbdfeed);
+        keyboard->kbdfeed = NULL;
+        free(keyboard->key);
+        keyboard->key = NULL;
+    }
 
     /* init keyboard and reload the map */
     if (!InitKeyboardDeviceStruct(keyboard, set, rdpkeybBell,
                                   rdpkeybChangeKeyboardControl))
     {
-        LLOGLN(0, ("rdpLoadLayout: InitKeyboardDeviceStruct failed"));
+        LLOGLN(0, ("reload_xkb: InitKeyboardDeviceStruct failed"));
         return 1;
     }
 
@@ -766,48 +576,58 @@ reload_xkb(DeviceIntPtr keyboard, XkbRMLVOSet *set)
 static int
 rdpLoadLayout(rdpKeyboard *keyboard, struct xrdp_client_info *client_info)
 {
-    XkbRMLVOSet set;
+    // Load default layout parameters
+    XkbRMLVOSet set =
+    {
+        .rules = g_evdev_str,
+        .model = g_pc104_str,
+        .layout = g_us_str,
+        .variant = g_empty_str,
+        .options = g_empty_str
+    };
 
-    int keylayout = client_info->keylayout;
+    if (client_info != NULL)
+    {
+        if (strlen(client_info->model) > 0)
+        {
+            set.model = client_info->model;
+        }
+        if (strlen(client_info->variant) > 0)
+        {
+            set.variant = client_info->variant;
+        }
+        if (strlen(client_info->layout) > 0)
+        {
+            set.layout = client_info->layout;
+        }
+        if (strlen(client_info->options) > 0)
+        {
+            set.options = client_info->options;
+        }
+        if (strlen(client_info->xkb_rules) > 0)
+        {
+            set.rules = client_info->xkb_rules;
+        }
 
-    LLOGLN(0, ("rdpLoadLayout: keylayout 0x%8.8x variant %s display %s",
-               keylayout, client_info->variant, display));
-    memset(&set, 0, sizeof(set));
-    set.rules = g_evdev_str;
+        /* X11 keycodes needed to sync the keyboard */
+        keyboard->x11_keycode_caps_lock = client_info->x11_keycode_caps_lock;
+        keyboard->x11_keycode_num_lock = client_info->x11_keycode_num_lock;
+        keyboard->x11_keycode_scroll_lock = client_info->x11_keycode_scroll_lock;
+    }
+    else
+    {
+        keyboard->x11_keycode_caps_lock = CAPS_LOCK_KEY_CODE;
+        keyboard->x11_keycode_num_lock = NUM_LOCK_KEY_CODE;
+        keyboard->x11_keycode_scroll_lock = SCROLL_LOCK_KEY_CODE;
+    }
 
-    set.model = g_pc104_str;
-    set.layout = g_us_str;
-    set.variant = g_empty_str;
-    set.options = g_empty_str;
-
-    if (strlen(client_info->model) > 0)
-    {
-        set.model = client_info->model;
-    }
-    if (strlen(client_info->variant) > 0)
-    {
-        set.variant = client_info->variant;
-    }
-    if (strlen(client_info->layout) > 0)
-    {
-        set.layout = client_info->layout;
-    }
-    if (strlen(client_info->options) > 0)
-    {
-        set.options = client_info->options;
-    }
-    if (strlen(client_info->xkb_rules) > 0)
-    {
-        set.rules = client_info->xkb_rules;
-    }
+    LLOGLN(0, ("rdpLoadLayout: rules=\"%s\" model=\"%s\" variant=\"%s\""
+               "layout=\"%s\" options=\"%s\"",
+               set.rules, set.model, set.variant, set.layout, set.options));
 
     reload_xkb(keyboard->device, &set);
     reload_xkb(inputInfo.keyboard, &set);
 
-    /* Copy X11 keycodes needed to sync the keyboard */
-    keyboard->x11_keycode_caps_lock = client_info->x11_keycode_caps_lock;
-    keyboard->x11_keycode_num_lock = client_info->x11_keycode_num_lock;
-    keyboard->x11_keycode_scroll_lock = client_info->x11_keycode_scroll_lock;
     return 0;
 }
 
