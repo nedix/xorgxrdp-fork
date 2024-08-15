@@ -13,7 +13,6 @@ AC_CONFIG_HEADERS(config_ac.h:config_ac-h.in)
 AM_INIT_AUTOMAKE([1.11 foreign parallel-tests])
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 AC_PROG_CC_C99
-AC_C_CONST
 AC_PROG_LIBTOOL
 
 case $host_os in
