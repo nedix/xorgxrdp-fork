@@ -61,6 +61,9 @@ Client connection to xrdp
 #define USE_MAX_OS_BYTES 1
 #define MAX_OS_BYTES (16 * 1024 * 1024)
 
+#define MIN_MS_BETWEEN_FRAMES 40
+#define MIN_MS_TO_WAIT_FOR_MORE_UPDATES 4
+
 /*
 0 GXclear,        0
 1 GXnor,          DPon
@@ -2539,7 +2542,7 @@ rdpClientConScheduleDeferredUpdate(rdpPtr dev)
     {
         dev->sendUpdateScheduled = TRUE;
         dev->sendUpdateTimer =
-                TimerSet(dev->sendUpdateTimer, 0, 40,
+                TimerSet(dev->sendUpdateTimer, 0, MIN_MS_BETWEEN_FRAMES,
                          rdpClientConDeferredUpdateCallback, dev);
     }
 }
@@ -2981,9 +2984,6 @@ rdpDeferredUpdateCallback(OsTimerPtr timer, CARD32 now, pointer arg)
 
 
 /******************************************************************************/
-#define MIN_MS_BETWEEN_FRAMES 40
-#define MIN_MS_TO_WAIT_FOR_MORE_UPDATES 4
-#define UPDATE_RETRY_TIMEOUT 200 // After this number of retries, give up and perform the capture anyway. This prevents an infinite loop.
 static void
 rdpScheduleDeferredUpdate(rdpClientCon *clientCon)
 {
