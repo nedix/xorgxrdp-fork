@@ -63,7 +63,6 @@ Client connection to xrdp
 
 #define MIN_MS_BETWEEN_FRAMES 40
 #define MIN_MS_TO_WAIT_FOR_MORE_UPDATES 4
-#define UPDATE_RETRY_TIMEOUT 200 // After this number of retries, give up and perform the capture anyway. This prevents an infinite loop.
 
 /*
 0 GXclear,        0
