@@ -63,6 +63,7 @@ int g_simd_use_accel = 1;
     do { if (_level < LOG_LEVEL) { ErrorF _args ; ErrorF("\n"); } } while (0)
 
 #if SIMD_USE_ACCEL
+
 #if defined(__x86_64__) || defined(__AMD64__) || defined (_M_AMD64)
 /******************************************************************************/
 static int
@@ -71,24 +72,36 @@ a8r8g8b8_to_nv12_box_amd64_sse2_wrap(const uint8_t *s8, int src_stride,
                                      uint8_t *d8_uv, int dst_stride_uv,
                                      int width, int height)
 {
-    int awidth;
-    int lwidth;
+    int aligned_width;
+    int left_over_width;
+    int error;
 
-    awidth = width & ~7;
-    lwidth = width - awidth;
-    if (awidth > 0)
+    aligned_width = width & ~7;
+    left_over_width = width - aligned_width;
+    if (height > 0)
     {
-        a8r8g8b8_to_nv12_box_amd64_sse2(s8, src_stride,
-                                        d8_y, dst_stride_y,
-                                        d8_uv, dst_stride_uv,
-                                        awidth, height);
-    }
-    if (lwidth > 0)
-    {
-        a8r8g8b8_to_nv12_box(s8 + awidth * 4, src_stride,
-                             d8_y + awidth, dst_stride_y,
-                             d8_uv + awidth, dst_stride_uv,
-                             lwidth, height);
+        if (aligned_width > 0)
+        {
+            error = a8r8g8b8_to_nv12_box_amd64_sse2(s8, src_stride,
+                                                    d8_y, dst_stride_y,
+                                                    d8_uv, dst_stride_uv,
+                                                    aligned_width, height);
+            if (error != 0)
+            {
+                return error;
+            }
+        }
+        if (left_over_width > 0)
+        {
+            error = a8r8g8b8_to_nv12_box(s8 + aligned_width * 4, src_stride,
+                                         d8_y + aligned_width, dst_stride_y,
+                                         d8_uv + aligned_width, dst_stride_uv,
+                                         left_over_width, height);
+            if (error != 0)
+            {
+                return error;
+            }
+        }
     }
     return 0;
 }
@@ -100,28 +113,84 @@ a8r8g8b8_to_nv12_709fr_box_amd64_sse2_wrap(const uint8_t *s8, int src_stride,
                                            uint8_t *d8_uv, int dst_stride_uv,
                                            int width, int height)
 {
-    int awidth;
-    int lwidth;
+    int aligned_width;
+    int left_over_width;
+    int error;
 
-    awidth = width & ~7;
-    lwidth = width - awidth;
-    if (awidth > 0)
+    aligned_width = width & ~7;
+    left_over_width = width - aligned_width;
+    if (height > 0)
     {
-        a8r8g8b8_to_nv12_709fr_box_amd64_sse2(s8, src_stride,
-                                              d8_y, dst_stride_y,
-                                              d8_uv, dst_stride_uv,
-                                              awidth, height);
-    }
-    if (lwidth > 0)
-    {
-        a8r8g8b8_to_nv12_709fr_box(s8 + awidth * 4, src_stride,
-                                   d8_y + awidth, dst_stride_y,
-                                   d8_uv + awidth, dst_stride_uv,
-                                   lwidth, height);
+        if (aligned_width > 0)
+        {
+            error = a8r8g8b8_to_nv12_709fr_box_amd64_sse2(s8, src_stride,
+                                                          d8_y, dst_stride_y,
+                                                          d8_uv, dst_stride_uv,
+                                                          aligned_width,
+                                                          height);
+            if (error != 0)
+            {
+                return error;
+            }
+        }
+        if (left_over_width > 0)
+        {
+            error = a8r8g8b8_to_nv12_709fr_box(s8 + aligned_width * 4,
+                                               src_stride,
+                                               d8_y + aligned_width,
+                                               dst_stride_y,
+                                               d8_uv + aligned_width,
+                                               dst_stride_uv,
+                                               left_over_width, height);
+            if (error != 0)
+            {
+                return error;
+            }
+        }
     }
     return 0;
 }
-#elif defined(__x86__) || defined(_M_IX86) || defined(__i386__)
+
+/*****************************************************************************/
+int
+a8r8g8b8_to_yuvalp_box_amd64_sse2_wrap(const uint8_t *s8, int src_stride,
+                                       uint8_t *d8, int dst_stride,
+                                       int width, int height)
+{
+    int aligned_width;
+    int left_over_width;
+    int error;
+
+    aligned_width = width & ~7;
+    left_over_width = width - aligned_width;
+    if (height > 0)
+    {
+        if (aligned_width > 0)
+        {
+            error = a8r8g8b8_to_yuvalp_box_amd64_sse2(s8, src_stride,
+                                                      d8, dst_stride,
+                                                      aligned_width, height);
+            if (error != 0)
+            {
+                return error;
+            }
+        }
+        if (left_over_width > 0)
+        {
+            error = a8r8g8b8_to_yuvalp_box(s8 + aligned_width * 4, src_stride,
+                                           d8 + aligned_width, dst_stride,
+                                           left_over_width, height);
+            if (error != 0)
+            {
+                return error;
+            }
+        }
+    }
+    return 0;
+}
+#endif
+
+#if defined(__x86__) || defined(_M_IX86) || defined(__i386__)
 /******************************************************************************/
 static int
 a8r8g8b8_to_nv12_box_x86_sse2_wrap(const uint8_t *s8, int src_stride,
@@ -129,24 +198,36 @@ a8r8g8b8_to_nv12_box_x86_sse2_wrap(const uint8_t *s8, int src_stride,
                                    uint8_t *d8_uv, int dst_stride_uv,
                                    int width, int height)
 {
-    int awidth;
-    int lwidth;
+    int aligned_width;
+    int left_over_width;
+    int error;
 
-    awidth = width & ~7;
-    lwidth = width - awidth;
-    if (awidth > 0)
+    aligned_width = width & ~7;
+    left_over_width = width - aligned_width;
+    if (height > 0)
     {
-        a8r8g8b8_to_nv12_box_x86_sse2(s8, src_stride,
-                                      d8_y, dst_stride_y,
-                                      d8_uv, dst_stride_uv,
-                                      awidth, height);
-    }
-    if (lwidth > 0)
-    {
-        a8r8g8b8_to_nv12_box(s8 + awidth * 4, src_stride,
-                             d8_y + awidth, dst_stride_y,
-                             d8_uv + awidth, dst_stride_uv,
-                             lwidth, height);
+        if (aligned_width > 0)
+        {
+            error = a8r8g8b8_to_nv12_box_x86_sse2(s8, src_stride,
+                                                  d8_y, dst_stride_y,
+                                                  d8_uv, dst_stride_uv,
+                                                  aligned_width, height);
+            if (error != 0)
+            {
+                return error;
+            }
+        }
+        if (left_over_width > 0)
+        {
+            error = a8r8g8b8_to_nv12_box(s8 + aligned_width * 4, src_stride,
+                                         d8_y + aligned_width, dst_stride_y,
+                                         d8_uv + aligned_width, dst_stride_uv,
+                                         left_over_width, height);
+            if (error != 0)
+            {
+                return error;
+            }
+        }
     }
     return 0;
 }
@@ -158,28 +239,82 @@ a8r8g8b8_to_nv12_709fr_box_x86_sse2_wrap(const uint8_t *s8, int src_stride,
                                          uint8_t *d8_uv, int dst_stride_uv,
                                          int width, int height)
 {
-    int awidth;
-    int lwidth;
+    int aligned_width;
+    int left_over_width;
+    int error;
 
-    awidth = width & ~7;
-    lwidth = width - awidth;
-    if (awidth > 0)
+    aligned_width = width & ~7;
+    left_over_width = width - aligned_width;
+    if (height > 0)
     {
-        a8r8g8b8_to_nv12_709fr_box_x86_sse2(s8, src_stride,
-                                            d8_y, dst_stride_y,
-                                            d8_uv, dst_stride_uv,
-                                            awidth, height);
+        if (aligned_width > 0)
+        {
+            error = a8r8g8b8_to_nv12_709fr_box_x86_sse2(s8, src_stride,
+                                                        d8_y, dst_stride_y,
+                                                        d8_uv, dst_stride_uv,
+                                                        aligned_width, height);
+            if (error != 0)
+            {
+                return error;
+            }
+        }
+        if (left_over_width > 0)
+        {
+            error = a8r8g8b8_to_nv12_709fr_box(s8 + aligned_width * 4,
+                                               src_stride,
+                                               d8_y + aligned_width,
+                                               dst_stride_y,
+                                               d8_uv + aligned_width,
+                                               dst_stride_uv,
+                                               left_over_width, height);
+            if (error != 0)
+            {
+                return error;
+            }
+        }
     }
-    if (lwidth > 0)
+    return 0;
+}
+
+/*****************************************************************************/
+int
+a8r8g8b8_to_yuvalp_box_x86_sse2_wrap(const uint8_t *s8, int src_stride,
+                                     uint8_t *d8, int dst_stride,
+                                     int width, int height)
+{
+    int aligned_width;
+    int left_over_width;
+    int error;
+
+    aligned_width = width & ~7;
+    left_over_width = width - aligned_width;
+    if (height > 0)
     {
-        a8r8g8b8_to_nv12_709fr_box(s8 + awidth * 4, src_stride,
-                                   d8_y + awidth, dst_stride_y,
-                                   d8_uv + awidth, dst_stride_uv,
-                                   lwidth, height);
+        if (aligned_width > 0)
+        {
+            error = a8r8g8b8_to_yuvalp_box_x86_sse2(s8, src_stride,
+                                                    d8, dst_stride,
+                                                    aligned_width, height);
+            if (error != 0)
+            {
+                return error;
+            }
+        }
+        if (left_over_width > 0)
+        {
+            error = a8r8g8b8_to_yuvalp_box(s8 + aligned_width * 4, src_stride,
+                                           d8 + aligned_width, dst_stride,
+                                           left_over_width, height);
+            if (error != 0)
+            {
+                return error;
+            }
+        }
     }
     return 0;
 }
 #endif
+
 #endif
 
 /*****************************************************************************/
@@ -198,6 +333,7 @@ rdpSimdInit(ScreenPtr pScreen, ScrnInfoPtr pScrn)
     dev->a8r8g8b8_to_a8b8g8r8_box = a8r8g8b8_to_a8b8g8r8_box;
     dev->a8r8g8b8_to_nv12_box = a8r8g8b8_to_nv12_box;
     dev->a8r8g8b8_to_nv12_709fr_box = a8r8g8b8_to_nv12_709fr_box;
+    dev->a8r8g8b8_to_yuvalp_box = a8r8g8b8_to_yuvalp_box;
 #if SIMD_USE_ACCEL
     if (g_simd_use_accel)
     {
@@ -215,6 +351,7 @@ rdpSimdInit(ScreenPtr pScreen, ScrnInfoPtr pScrn)
             dev->a8r8g8b8_to_a8b8g8r8_box = a8r8g8b8_to_a8b8g8r8_box_amd64_sse2;
             dev->a8r8g8b8_to_nv12_box = a8r8g8b8_to_nv12_box_amd64_sse2_wrap;
             dev->a8r8g8b8_to_nv12_709fr_box = a8r8g8b8_to_nv12_709fr_box_amd64_sse2_wrap;
+            dev->a8r8g8b8_to_yuvalp_box = a8r8g8b8_to_yuvalp_box_amd64_sse2_wrap;
             LLOGLN(0, ("rdpSimdInit: sse2 amd64 yuv functions assigned"));
         }
 #elif defined(__x86__) || defined(_M_IX86) || defined(__i386__)
@@ -231,6 +368,7 @@ rdpSimdInit(ScreenPtr pScreen, ScrnInfoPtr pScrn)
             dev->a8r8g8b8_to_a8b8g8r8_box = a8r8g8b8_to_a8b8g8r8_box_x86_sse2;
             dev->a8r8g8b8_to_nv12_box = a8r8g8b8_to_nv12_box_x86_sse2_wrap;
             dev->a8r8g8b8_to_nv12_709fr_box = a8r8g8b8_to_nv12_709fr_box_x86_sse2_wrap;
+            dev->a8r8g8b8_to_yuvalp_box = a8r8g8b8_to_yuvalp_box_x86_sse2_wrap;
             LLOGLN(0, ("rdpSimdInit: sse2 x86 yuv functions assigned"));
         }
 #endif
@@ -238,3 +376,4 @@ rdpSimdInit(ScreenPtr pScreen, ScrnInfoPtr pScrn)
 #endif
     return 1;
 }
+

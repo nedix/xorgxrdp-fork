@@ -128,7 +128,7 @@ rdpAllocRec(ScrnInfoPtr pScrn)
         return TRUE;
     }
     /* xnfcalloc exits if alloc failed */
-    pScrn->reservedPtr[0] = xnfcalloc(sizeof(rdpRec), 1);
+    pScrn->driverPrivate = xnfcalloc(sizeof(rdpRec), 1);
     return TRUE;
 }
 
