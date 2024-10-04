@@ -316,7 +316,6 @@ struct _rdpRec
     int monitorCount;
     /* glamor */
     Bool glamor;
-    Bool nvidia;
     PixmapPtr screenSwPixmap;
     void *xvPutImage;
     /* dri */
@@ -327,7 +326,7 @@ struct _rdpRec
 };
 typedef struct _rdpRec rdpRec;
 typedef struct _rdpRec * rdpPtr;
-#define XRDPPTR(_p) ((rdpPtr)((_p)->reservedPtr[0]))
+#define XRDPPTR(_p) ((rdpPtr)((_p)->driverPrivate))
 
 struct _rdpGCRec
 {

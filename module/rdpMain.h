@@ -28,8 +28,6 @@ rdp module main
 #include <xorgVersion.h>
 #include <xf86.h>
 
-extern _X_EXPORT int
-xorgxrdpCheckWrap(void);
 extern _X_EXPORT void
 xorgxrdpDownDown(ScreenPtr pScreen);
 
