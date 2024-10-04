@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2017 Jay Sorg
+Copyright 2013-2024 Jay Sorg
 
 Permission to use, copy, modify, distribute, and sell this software and its
 documentation for any purpose is hereby granted without fee, provided that
@@ -73,6 +73,7 @@ rdp module main
 #include "rdpSimd.h"
 #include "rdpReg.h"
 #ifdef XORGXRDP_LRANDR
+#include "rdpRandR.h"
 #include "rdpLRandR.h"
 #else
 #include "rdpRandR.h"
@@ -107,7 +108,7 @@ xorgxrdpPreInit(ScrnInfoPtr pScrn, int flags)
     {
         pScrn->reservedPtr[0] = xnfcalloc(sizeof(rdpRec), 1);
 #if defined(RANDR) && defined(XORGXRDP_LRANDR)
-        noRRExtension = TRUE; /* do not use build in randr */
+        noRRExtension = TRUE; /* do not use built in randr */
 #endif
     }
     return rv;
@@ -200,6 +201,11 @@ xorgxrdpRRScreenSetSize(ScreenPtr pScreen, CARD16 width, CARD16 height,
     dev->pfbMemory = dev->screenSwPixmap->devPrivate.ptr;
     dev->paddedWidthInBytes = dev->screenSwPixmap->devKind;
     dev->sizeInBytes = dev->paddedWidthInBytes * dev->height;
+
+    LLOGLN(0, ("xorgxrdpRRScreenSetSize: screenInfo x %d y %d "
+           "width %d height %d", screenInfo.x, screenInfo.y,
+           screenInfo.width, screenInfo.height));
+
     return rv;
 }
 

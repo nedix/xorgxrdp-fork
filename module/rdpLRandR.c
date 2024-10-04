@@ -18,6 +18,7 @@
 #include "rdpDraw.h"
 #include "rdpMisc.h"
 #include "rdpReg.h"
+#include "rdpLRandR.h"
 
 #if defined(XORGXRDP_GLAMOR)
 #include <glamor.h>
@@ -43,9 +44,9 @@ mode ids    33      48
 #define LRRNumberRequests               32 /* 1.3 */
 #define LRRMaxCrtcs                     16
 #define LRRMaxOutputs                   16
-#define LRRMaxOutputNameLength          16
+#define LRRMaxOutputNameLength          32
 #define LRRMaxModes                     16
-#define LRRMaxModesNameLength           16
+#define LRRMaxModesNameLength           32
 #define LRRCrtcStart                    1
 #define LRROutputStart                  17
 #define LRRModeStart                    33
@@ -118,7 +119,7 @@ remove_client(ClientPtr pClient)
     {
         if (iterator->pClient == pClient)
         {
-            LLOGLN(0, ("remove_client:                      client %p found "
+            LLOGLN(10, ("remove_client:                      client %p found "
                    "pClient, removing", pClient));
             xorg_list_del(&(iterator->entry));
             free(iterator);
@@ -306,7 +307,7 @@ ProcLRRSelectInput(ClientPtr client)
         ic->pClient = client;
         ic->mask = stuff->enable;
         ic->window = stuff->window;
-        LLOGLN(0, ("ProcLRRSelectInput:                 client %p adding "
+        LLOGLN(10, ("ProcLRRSelectInput:                 client %p adding "
                "pClient to list", client));
         xorg_list_add(&(ic->entry), &g_interestedClients);
     }
@@ -1101,68 +1102,8 @@ rdpLRRInit(rdpPtr dev)
     //g_procLRandrVector[29] = ProcLRRSetPanning; TODO
     //g_procLRandrVector[30] = ProcLRRSetOutputPrimary; ok
     g_procLRandrVector[31] = ProcLRRGetOutputPrimary;
+    rdpLRRSetRdpOutputs(dev);
     return 0;
-}
-
-#if defined(XORGXRDP_GLAMOR)
-/*****************************************************************************/
-static int
-rdpLRRSetPixmapVisitWindow(WindowPtr window, void *data)
-{
-    ScreenPtr screen;
-
-    LLOGLN(10, ("rdpLRRSetPixmapVisitWindow:"));
-    screen = window->drawable.pScreen;
-    if (screen->GetWindowPixmap(window) == data)
-    {
-        screen->SetWindowPixmap(window, screen->GetScreenPixmap(screen));
-        return WT_WALKCHILDREN;
-    }
-    return WT_DONTWALKCHILDREN;
-}
-#endif
-
-/*
- * Edit connection information block so that new clients
- * see the current screen size on connect
- */
-/* from rrscreen.c */
-static void
-LRREditConnectionInfo(ScreenPtr pScreen)
-{
-    xConnSetup *connSetup;
-    char *vendor;
-    xPixmapFormat *formats;
-    xWindowRoot *root;
-    xDepth *depth;
-    xVisualType *visual;
-    int screen = 0;
-    int d;
-
-    if (ConnectionInfo == NULL)
-        return;
-
-    connSetup = (xConnSetup *) ConnectionInfo;
-    vendor = (char *) connSetup + sizeof(xConnSetup);
-    formats = (xPixmapFormat *) ((char *) vendor +
-                                 pad_to_int32(connSetup->nbytesVendor));
-    root = (xWindowRoot *) ((char *) formats +
-                            sizeof(xPixmapFormat) *
-                            screenInfo.numPixmapFormats);
-    while (screen != pScreen->myNum) {
-        depth = (xDepth *) ((char *) root + sizeof(xWindowRoot));
-        for (d = 0; d < root->nDepths; d++) {
-            visual = (xVisualType *) ((char *) depth + sizeof(xDepth));
-            depth = (xDepth *) ((char *) visual +
-                                depth->nVisuals * sizeof(xVisualType));
-        }
-        root = (xWindowRoot *) ((char *) depth);
-        screen++;
-    }
-    root->pixWidth = pScreen->width;
-    root->pixHeight = pScreen->height;
-    root->mmWidth = pScreen->mmWidth;
-    root->mmHeight = pScreen->mmHeight;
 }
 
 /******************************************************************************/
@@ -1181,96 +1122,6 @@ LRRSendConfigNotify(ScreenPtr pScreen)
     event.u.configureNotify.override = pWin->overrideRedirect;
     event.u.u.type = ConfigureNotify;
     DeliverEvents(pWin, &event, 1, NullWindow);
-}
-
-/******************************************************************************/
-Bool
-rdpLRRScreenSizeSet(rdpPtr dev, int width, int height,
-                    int mmWidth, int mmHeight)
-{
-    WindowPtr root;
-    PixmapPtr screenPixmap;
-    BoxRec box;
-    ScreenPtr pScreen;
-
-    LLOGLN(10, ("rdpLRRScreenSizeSet: width %d height %d mmWidth %d mmHeight %d",
-           width, height, mmWidth, mmHeight));
-    pScreen = dev->pScreen;
-    root = rdpGetRootWindowPtr(pScreen);
-    if ((width < 1) || (height < 1))
-    {
-        LLOGLN(10, ("  error width %d height %d", width, height));
-        return FALSE;
-    }
-    dev->width = width;
-    dev->height = height;
-    dev->paddedWidthInBytes = PixmapBytePad(dev->width, dev->depth);
-    dev->sizeInBytes = dev->paddedWidthInBytes * dev->height;
-    pScreen->width = width;
-    pScreen->height = height;
-    pScreen->mmWidth = mmWidth;
-    pScreen->mmHeight = mmHeight;
-
-    g_width = width;
-    g_height = height;
-    g_mmWidth = mmWidth;
-    g_mmHeight = mmHeight;
-
-    screenPixmap = dev->screenSwPixmap;
-    free(dev->pfbMemory_alloc);
-    dev->pfbMemory_alloc = g_new0(uint8_t, dev->sizeInBytes + 16);
-    dev->pfbMemory = (uint8_t *) RDPALIGN(dev->pfbMemory_alloc, 16);
-    pScreen->ModifyPixmapHeader(screenPixmap, width, height,
-                                -1, -1,
-                                dev->paddedWidthInBytes,
-                                dev->pfbMemory);
-    if (dev->glamor)
-    {
-#if defined(XORGXRDP_GLAMOR)
-        PixmapPtr old_screen_pixmap;
-        uint32_t screen_tex;
-        old_screen_pixmap = pScreen->GetScreenPixmap(pScreen);
-        screenPixmap = pScreen->CreatePixmap(pScreen,
-                                             pScreen->width,
-                                             pScreen->height,
-                                             pScreen->rootDepth,
-                                             GLAMOR_CREATE_NO_LARGE);
-        if (screenPixmap == NULL)
-        {
-            return FALSE;
-        }
-        screen_tex = glamor_get_pixmap_texture(screenPixmap);
-        LLOGLN(0, ("rdpLRRScreenSizeSet: screen_tex 0x%8.8x", screen_tex));
-        pScreen->SetScreenPixmap(screenPixmap);
-        if ((pScreen->root != NULL) && (pScreen->SetWindowPixmap != NULL))
-        {
-            TraverseTree(pScreen->root, rdpLRRSetPixmapVisitWindow, old_screen_pixmap);
-        }
-        pScreen->DestroyPixmap(old_screen_pixmap);
-#endif
-    }
-    box.x1 = 0;
-    box.y1 = 0;
-    box.x2 = width;
-    box.y2 = height;
-    rdpRegionInit(&root->winSize, &box, 1);
-    rdpRegionInit(&root->borderSize, &box, 1);
-    rdpRegionReset(&root->borderClip, &box);
-    rdpRegionBreak(&root->clipList);
-    root->drawable.width = width;
-    root->drawable.height = height;
-    ResizeChildrenWinSize(root, 0, 0, 0, 0);
-    LLOGLN(0, ("  screen resized to %dx%d", pScreen->width, pScreen->height));
-    LRREditConnectionInfo(pScreen);
-#if XORG_VERSION_CURRENT < XORG_VERSION_NUMERIC(1, 13, 0, 0, 0)
-    xf86EnableDisableFBAccess(pScreen->myNum, FALSE);
-    xf86EnableDisableFBAccess(pScreen->myNum, TRUE);
-#else
-    xf86EnableDisableFBAccess(xf86Screens[pScreen->myNum], FALSE);
-    xf86EnableDisableFBAccess(xf86Screens[pScreen->myNum], TRUE);
-#endif
-
-    return TRUE;
 }
 
 /******************************************************************************/
@@ -1326,8 +1177,8 @@ rdpLRRSetRdpOutputs(rdpPtr dev)
         {
             g_crtcs[index].x = dev->minfo[index].left;
             g_crtcs[index].y = dev->minfo[index].top;
-            width = dev->minfo[index].right - dev->minfo[index].left;
-            height = dev->minfo[index].bottom - dev->minfo[index].top;
+            width = dev->minfo[index].right - dev->minfo[index].left + 1;
+            height = dev->minfo[index].bottom - dev->minfo[index].top + 1;
             g_crtcs[index].width = width;
             g_crtcs[index].height = height;
             g_modes[index].width = width;

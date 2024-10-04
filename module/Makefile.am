@@ -33,13 +33,8 @@ EXTRA_SOURCES += rdpLRandR.c
 EXTRA_HEADERS += rdpLRandR.h
 endif
 
-if WITH_LRANDR
-EXTRA_FLAGS += -DXORGXRDP_LRANDR
-EXTRA_SOURCES += rdpLRandR.c
-EXTRA_HEADERS += rdpLRandR.h
-endif
-
 AM_CFLAGS = \
+  -DXRDP_LIBEXEC_PATH=\"${libexecdir}/xrdp\" \
   $(XORG_SERVER_CFLAGS) \
   $(XRDP_CFLAGS) \
   -DPACKAGE_VERSION_MAJOR=@package_version_major@ \
