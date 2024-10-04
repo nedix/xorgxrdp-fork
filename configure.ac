@@ -13,7 +13,6 @@ AC_CONFIG_HEADERS(config_ac.h:config_ac-h.in)
 AM_INIT_AUTOMAKE([1.11 foreign parallel-tests])
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 AC_PROG_CC_C99
-AC_C_CONST
 AC_PROG_LIBTOOL
 
 case $host_os in
@@ -120,6 +119,11 @@ AC_ARG_ENABLE(glamor, AS_HELP_STRING([--enable-glamor],
               [Use glamor(requires xorg server 1.19+) (default: no)]),
               [], [enable_glamor=no])
 AM_CONDITIONAL(WITH_GLAMOR, [test x$enable_glamor = xyes])
+
+AC_ARG_ENABLE(lrandr, AS_HELP_STRING([--enable-lrandr],
+              [Use local randr (default: no)]),
+              [], [enable_lrandr=no])
+AM_CONDITIONAL(WITH_LRANDR, [test x$enable_lrandr = xyes])
 
 AM_CONDITIONAL(WITH_SIMD_AMD64, [test x$simd_arch = xx86_64])
 AM_CONDITIONAL(WITH_SIMD_X86, [test x$simd_arch = xi386])
