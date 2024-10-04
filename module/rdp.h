@@ -61,6 +61,35 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
         b = (c) & UCHAR_MAX; \
     } while (0)
 
+/* PIXMAN_a8b8g8r8 */
+#define XRDP_a8b8g8r8 \
+((32 << 24) | (3 << 16) | (8 << 12) | (8 << 8) | (8 << 4) | 8)
+/* PIXMAN_a8r8g8b8 */
+#define XRDP_a8r8g8b8 \
+((32 << 24) | (2 << 16) | (8 << 12) | (8 << 8) | (8 << 4) | 8)
+/* PIXMAN_r5g6b5 */
+#define XRDP_r5g6b5 \
+((16 << 24) | (2 << 16) | (0 << 12) | (5 << 8) | (6 << 4) | 5)
+/* PIXMAN_a1r5g5b5 */
+#define XRDP_a1r5g5b5 \
+((16 << 24) | (2 << 16) | (1 << 12) | (5 << 8) | (5 << 4) | 5)
+/* PIXMAN_r3g3b2 */
+#define XRDP_r3g3b2 \
+((8 << 24) | (2 << 16) | (0 << 12) | (3 << 8) | (3 << 4) | 2)
+
+/* XRDP_nv12 */
+#define XRDP_nv12 \
+((12 << 24) | (64 << 16) | (0 << 12) | (0 << 8) | (0 << 4) | 0)
+/* XRDP_nv12 */
+#define XRDP_i420 \
+((12 << 24) | (65 << 16) | (0 << 12) | (0 << 8) | (0 << 4) | 0)
+/* XRDP_nv12_709fr */
+#define XRDP_nv12_709fr \
+((12 << 24) | (66 << 16) | (0 << 12) | (0 << 8) | (0 << 4) | 0)
+/* XRDP_yuv444_709fr */
+#define XRDP_yuv444_709fr \
+((32 << 24) | (67 << 16) | (0 << 12) | (0 << 8) | (0 << 4) | 0)
+
 #define PixelToMM(_size, _dpi) (((_size) * 254 + (_dpi) * 5) / ((_dpi) * 10))
 
 #define RDPMIN(_val1, _val2) ((_val1) < (_val2) ? (_val1) : (_val2))
@@ -98,8 +127,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 struct image_data
 {
-    int left;
-    int top;
     int width;
     int height;
     int bpp;
@@ -108,8 +135,7 @@ struct image_data
     int flags;
     uint8_t *pixels;
     uint8_t *shmem_pixels;
-    int shmem_fd;
-    int shmem_bytes;
+    int shmem_id;
     int shmem_offset;
     int shmem_lineBytes;
 };
@@ -131,24 +157,14 @@ typedef struct _rdpPointer rdpPointer;
 
 struct _rdpKeyboard
 {
-    /**
-     * State of tab key
-     *
-     * Used to remove mstsc.exe tab KeyRelease before and after TS_SYNC_EVENT
-     */
+    int pause_spe;
+    int ctrl_down;
+    int alt_down;
+    int shift_down;
     int tab_down;
-
-    /**
-     * Whether or not to skip the next numlock key press/release
-     */
-    int skip_numlock;
-
-    int x11_keycode_caps_lock; ///< Used in TS_SYNC_EVENT processing
-    int x11_keycode_num_lock; ///< Used in TS_SYNC_EVENT processing
-    int x11_keycode_scroll_lock; ///< Used in TS_SYNC_EVENT processing
-
-    int scroll_lock_down; ///< Whether key is up/down
-    int scroll_lock_state; ///< Toggle state
+    /* this is toggled every time num lock key is released, not like the
+       above *_down vars */
+    int scroll_lock_down;
     DeviceIntPtr device;
 };
 typedef struct _rdpKeyboard rdpKeyboard;
@@ -280,6 +296,7 @@ struct _rdpRec
     int sendUpdateScheduled; /* boolean */
     OsTimerPtr sendUpdateTimer;
 
+    int do_dirty_os; /* boolean */
     int do_dirty_ons; /* boolean */
     int disconnect_scheduled; /* boolean */
     int do_kill_disconnected; /* boolean */
@@ -309,7 +326,6 @@ struct _rdpRec
     copy_box_proc a8r8g8b8_to_a8b8g8r8_box;
     copy_box_dst2_proc a8r8g8b8_to_nv12_box;
     copy_box_dst2_proc a8r8g8b8_to_nv12_709fr_box;
-    copy_box_proc a8r8g8b8_to_yuvalp_box;
 
     /* multimon */
     struct monitor_info minfo[16]; /* client monitor data */
@@ -317,6 +333,7 @@ struct _rdpRec
     int monitorCount;
     /* glamor */
     Bool glamor;
+    Bool nvidia;
     PixmapPtr screenSwPixmap;
     void *xvPutImage;
     /* dri */
@@ -327,7 +344,7 @@ struct _rdpRec
 };
 typedef struct _rdpRec rdpRec;
 typedef struct _rdpRec * rdpPtr;
-#define XRDPPTR(_p) ((rdpPtr)((_p)->driverPrivate))
+#define XRDPPTR(_p) ((rdpPtr)((_p)->reservedPtr[0]))
 
 struct _rdpGCRec
 {
